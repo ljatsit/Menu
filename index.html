@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu Application</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            box-sizing: border-box;
+            font-family: 'Noto Sans Lao', sans-serif; /* ฟอนต์ภาษาลาว/ไทย */
+        }
+
+        * {
+            font-family: 'Noto Sans Lao', sans-serif;
+        }
+
+        /* รูปแบบเมนูบล็อก */
+        .menu-block {
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid #e2e8f0;
+        }
+        
+        /* Hover Effect */
+        .menu-block:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.1);
+            background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+        }
+        
+        /* Loading Spinner */
+        .loading-spinner {
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Logo Container */
+        .logo-container {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            border: 2px solid #cbd5e1;
+        }
+        
+        .logo-image {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen p-8">
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-bold text-slate-800 text-center mb-12">ລະບົບຈັດການເມນູ(Menu System) </h1>
+        
+        <div class="text-center mb-8">
+            <button id="refresh-btn" onclick="loadMenuData()" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                🔄 Refresh
+            </button>
+        </div>
+        
+        <div id="loading" class="flex flex-col items-center justify-center py-20">
+            <div class="loading-spinner mb-4"></div>
+            <p class="text-slate-600 text-lg">ກຳລັງໂຫຼດຂໍ້ມູນ...</p>
+        </div>
+        
+        <div id="error" class="hidden bg-red-500 text-white p-6 rounded-lg text-center">
+            <h2 class="text-xl font-bold mb-2">ເກີດຂໍ້ຜິດພາດ</h2>
+            <p id="error-message"></p>
+            <button onclick="loadMenuData()" class="mt-4 bg-white text-red-500 px-6 py-2 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
+                ລອງໃໝ່ອີກຄັ້ງ
+            </button>
+        </div>
+        
+        <div id="menu-container" class="hidden">
+            <div id="menu-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 mb-8">
+            </div>
+            
+            <div id="pagination" class="flex justify-center items-center space-x-4 hidden">
+                <button id="prev-btn" class="px-4 py-2 bg-white text-slate-600 rounded-lg shadow-md hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    ← ກ່ອນໜ້າ
+                </button>
+                
+                <div id="page-info" class="flex items-center space-x-2">
+                    <span class="text-slate-600">ໜ້າ</span>
+                    <span id="current-page" class="font-bold text-slate-800">1</span>
+                    <span class="text-slate-600">ຈາກ</span>
+                    <span id="total-pages" class="font-bold text-slate-800">1</span>
+                </div>
+                
+                <button id="next-btn" class="px-4 py-2 bg-white text-slate-600 rounded-lg shadow-md hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    ຖັດໄປ →
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyX4pqcsM3QP_uHEldHnMyHERZVKRRCs5phVqcSfJzG3_-SfNKJDV6HBgibhCXuixoR/exec';
+        
+        // Pagination variables
+        let currentPage = 1;
+        let itemsPerPage = 8;
+        let allMenuItems = [];
+        
+        // --- ส่วนเพิ่มเติมสำหรับการอัพเดทอัตโนมัติ ---
+        let refreshInterval = 3000; // ตั้งค่าให้รีเฟรชทุก 30 วินาที
+        let autoRefreshTimer;
+
+        function startAutoRefresh() {
+            // ล้าง Timer เก่า (ถ้ามี)
+            clearInterval(autoRefreshTimer); 
+            // ตั้งค่า Timer ใหม่ให้เรียก loadMenuData แบบ Silent ทุกๆ refreshInterval
+            autoRefreshTimer = setInterval(() => {
+                console.log('Auto-refreshing menu data...');
+                loadMenuData(true); // true = Silent Refresh
+            }, refreshInterval);
+        }
+
+        function stopAutoRefresh() {
+            clearInterval(autoRefreshTimer);
+        }
+        // ------------------------------------------
+        
+        /**
+         * ดึงข้อมูลเมนูจาก Google Apps Script
+         * @param {boolean} isSilent - ถ้าเป็น true จะไม่แสดงสถานะ Loading หรือ Error
+         */
+        async function loadMenuData(isSilent = false) { 
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const container = document.getElementById('menu-container');
+            const refreshBtn = document.getElementById('refresh-btn');
+            
+            // 1. จัดการ UI (เฉพาะเมื่อไม่ใช่ Silent Refresh)
+            if (!isSilent) {
+                loading.classList.remove('hidden');
+                error.classList.add('hidden');
+                container.classList.add('hidden');
+                
+                // Disable refresh button
+                refreshBtn.disabled = true;
+                refreshBtn.textContent = '🔄 กำลังโຫຼด...';
+            }
+
+            // 2. หยุด Auto-Refresh ชั่วคราวในระหว่างการโหลด
+            stopAutoRefresh();
+            
+            try {
+                const response = await fetch(APPS_SCRIPT_URL);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data || !Array.isArray(data) || data.length === 0) {
+                    throw new Error('ບໍ່ເຫັນ Sheet');
+                }
+                
+                displayMenuItems(data, isSilent);
+                
+            } catch (err) {
+                console.error('Error loading data:', err);
+                 // แสดงข้อผิดพลาดเฉพาะเมื่อโหลดครั้งแรกหรือกด Refresh ด้วยตนเอง
+                if (!isSilent) {
+                    showError(err.message || 'ບໍ່ສາມາດໂຫຼດໄດ້');
+                }
+            } finally {
+                 // 3. เริ่ม Auto-Refresh ใหม่
+                startAutoRefresh(); 
+                
+                // 4. จัดการ UI (เฉพาะเมื่อไม่ใช่ Silent Refresh)
+                if (!isSilent) {
+                    // Re-enable refresh button
+                    refreshBtn.disabled = false;
+                    refreshBtn.textContent = '🔄 Refresh';
+                }
+            }
+        }
+        
+        /**
+         * แสดงรายการเมนูบนหน้าจอ
+         * @param {Array} data - ข้อมูลรายการเมนู
+         * @param {boolean} isSilent - ถ้าเป็น true จะไม่ซ่อนสถานะ Loading
+         */
+        function displayMenuItems(data, isSilent = false) { 
+            const loading = document.getElementById('loading');
+            
+            // กรองรายการที่ว่างเปล่า
+            allMenuItems = data.filter(item => item.logo || item.name || item.link);
+            
+            // รีเซ็ตไปหน้าแรกเมื่อไม่ใช่ silent refresh หรือหน้าปัจจุบันไม่ถูกต้อง
+            if (!isSilent || currentPage > Math.ceil(allMenuItems.length / itemsPerPage)) {
+                currentPage = 1;
+            }
+            
+            renderCurrentPage();
+            setupPagination();
+            
+            // ซ่อน Loading และแสดง Menu Container (เฉพาะเมื่อไม่ใช่ Silent Refresh)
+            if (!isSilent) {
+                loading.classList.add('hidden');
+                document.getElementById('menu-container').classList.remove('hidden');
+            }
+        }
+        
+        function renderCurrentPage() {
+            const menuGrid = document.getElementById('menu-grid');
+            menuGrid.innerHTML = '';
+            
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const currentItems = allMenuItems.slice(startIndex, endIndex);
+            
+            currentItems.forEach((item, index) => {
+                const menuBlock = createMenuBlock(item, startIndex + index);
+                menuGrid.appendChild(menuBlock);
+            });
+        }
+        
+        function setupPagination() {
+            const totalPages = Math.ceil(allMenuItems.length / itemsPerPage);
+            const pagination = document.getElementById('pagination');
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const currentPageSpan = document.getElementById('current-page');
+            const totalPagesSpan = document.getElementById('total-pages');
+            
+            // แสดง pagination เมื่อมีรายการมากกว่า itemsPerPage
+            if (allMenuItems.length > itemsPerPage) {
+                pagination.classList.remove('hidden');
+                
+                // Update page info
+                currentPageSpan.textContent = currentPage;
+                totalPagesSpan.textContent = totalPages;
+                
+                // Update button states
+                prevBtn.disabled = currentPage === 1;
+                nextBtn.disabled = currentPage === totalPages;
+                
+                // Add event listeners (ไม่จำเป็นต้องทำซ้ำในการอัปเดตอัตโนมัติ)
+                if (!prevBtn.onclick) {
+                    prevBtn.onclick = () => {
+                        if (currentPage > 1) {
+                            currentPage--;
+                            renderCurrentPage();
+                            setupPagination();
+                        }
+                    };
+                }
+                
+                if (!nextBtn.onclick) {
+                    nextBtn.onclick = () => {
+                        if (currentPage < totalPages) {
+                            currentPage++;
+                            renderCurrentPage();
+                            setupPagination();
+                        }
+                    };
+                }
+            } else {
+                pagination.classList.add('hidden');
+            }
+        }
+        
+        function createMenuBlock(item, index) {
+            const block = document.createElement('div');
+            block.className = 'menu-block rounded-xl p-6 text-slate-700 cursor-pointer shadow-lg';
+            
+            // Create logo container
+            const logoContainer = document.createElement('div');
+            logoContainer.className = 'logo-container';
+            
+            if (item.logo && item.logo.trim()) {
+                const logoImg = document.createElement('img');
+                logoImg.src = item.logo;
+                logoImg.alt = item.name || 'Logo';
+                logoImg.className = 'logo-image';
+                logoImg.onerror = function() {
+                    // Fallback เมื่อโหลดรูปไม่ได้
+                    this.style.display = 'none';
+                    const fallback = document.createElement('div');
+                    fallback.className = 'w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center text-2xl font-bold text-slate-600';
+                    fallback.textContent = (item.name || 'M').charAt(0).toUpperCase();
+                    logoContainer.appendChild(fallback);
+                };
+                logoContainer.appendChild(logoImg);
+            } else {
+                // Fallback icon เมื่อไม่มี URL โลโก้
+                const fallbackIcon = document.createElement('div');
+                fallbackIcon.className = 'w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center text-2xl font-bold text-slate-600';
+                fallbackIcon.textContent = (item.name || 'M').charAt(0).toUpperCase();
+                logoContainer.appendChild(fallbackIcon);
+            }
+            
+            // Create title
+            const title = document.createElement('h3');
+            title.className = 'text-xl font-bold text-center mb-2';
+            title.textContent = item.name || 'ບໍ່ມີຊື່';
+            
+            // Create description
+            const description = document.createElement('p');
+            description.className = 'text-sm text-center text-slate-500';
+            description.textContent = 'ກົດບ່ອນນີ້ເພື່ອເປີດ';
+            
+            // Add click handler
+            block.addEventListener('click', () => {
+                if (item.link && item.link.trim()) {
+                    window.open(item.link, '_blank', 'noopener,noreferrer');
+                } else {
+                    alert('ไม่พบลิงค์สำหรับรายการนี้');
+                }
+            });
+            
+            block.appendChild(logoContainer);
+            block.appendChild(title);
+            block.appendChild(description);
+            
+            return block;
+        }
+        
+        function showError(message) {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const errorMessage = document.getElementById('error-message');
+            
+            loading.classList.add('hidden');
+            error.classList.remove('hidden');
+            errorMessage.textContent = message;
+        }
+        
+        // โหลดข้อมูลเมื่อหน้าเว็บโหลดเสร็จ และเริ่ม Auto-Refresh
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMenuData();
+        });
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'989eb447416d3e0d',t:'MTc1OTY4NjAyNy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
