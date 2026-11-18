@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="lo">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ລະບົບແກ້ໄຂຂໍ້ມູນ (Mobile)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Google Fonts: Noto Sans Lao & Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Lao:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Noto Sans Lao', 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            background-color: #f1f5f9;
+        }
+        /* Custom scrollbar for mobile smoothness */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        /* Smooth slide-up animation for bottom sheet modal */
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-up {
+            animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        /* Stretch native calendar indicator to cover the entire date box so tapping anywhere opens the picker */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* Added: elegant global data-loading overlay (isolated from existing UI) */
+        #global-loading-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            display: flex; align-items: center; justify-content: center;
+            padding: 24px; background: rgba(15, 23, 42, .38);
+            -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
+            opacity: 0; visibility: hidden; pointer-events: none;
+            transition: opacity .22s ease, visibility .22s ease;
+        }
+        #global-loading-overlay.is-visible {
+            opacity: 1; visibility: visible; pointer-events: auto;
+        }
+        #global-loading-overlay .loading-card {
+            width: min(100%, 310px); padding: 28px 24px 22px;
+            border: 1px solid rgba(255,255,255,.8); border-radius: 26px;
+            background: rgba(255,255,255,.97);
+            box-shadow: 0 24px 70px rgba(15,23,42,.22);
+            text-align: center; transform: translateY(8px) scale(.97);
+            transition: transform .22s ease;
+        }
+        #global-loading-overlay.is-visible .loading-card {
+            transform: translateY(0) scale(1);
+        }
+        #global-loading-overlay .loading-orbit {
+            width: 62px; height: 62px; margin: 0 auto 17px;
+            border-radius: 50%; display: grid; place-items: center;
+            background: linear-gradient(135deg,#eef2ff,#f5f3ff);
+            position: relative;
+        }
+        #global-loading-overlay .loading-orbit:before {
+            content: ""; position: absolute; inset: -4px; border-radius: 50%;
+            border: 3px solid transparent; border-top-color: #6366f1;
+            border-right-color: #8b5cf6; animation: globalLoadingSpin .85s linear infinite;
+        }
+        #global-loading-overlay .loading-orbit:after {
+            content: ""; position: absolute; width: 8px; height: 8px;
+            right: 0; top: 7px; border-radius: 50%; background: #8b5cf6;
+            box-shadow: 0 0 0 4px rgba(139,92,246,.12);
+        }
+        #global-loading-overlay .loading-progress {
+            height: 5px; overflow: hidden; border-radius: 99px;
+            background: #e8eaf5; margin-top: 19px;
+        }
+        #global-loading-overlay .loading-progress span {
+            display: block; width: 38%; height: 100%; border-radius: inherit;
+            background: linear-gradient(90deg,#6366f1,#8b5cf6,#a78bfa);
+            animation: globalLoadingProgress 1.25s ease-in-out infinite;
+        }
+        @keyframes globalLoadingSpin { to { transform: rotate(360deg); } }
+        @keyframes globalLoadingProgress {
+            0% { transform: translateX(-110%); }
+            55% { transform: translateX(170%); }
+            100% { transform: translateX(290%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #global-loading-overlay *, #global-loading-overlay *:before,
+            #global-loading-overlay *:after { animation-duration: 2.5s !important; }
+        }
+
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col justify-between selection:bg-indigo-100 selection:text-indigo-900">
+
+    <!-- Top Gradient Header with Curved Bottom -->
+    <header class="bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 text-white pt-4 pb-16 px-4 rounded-b-[2.25rem] shadow-lg shadow-indigo-900/10 relative overflow-hidden">
+        <!-- Decorative subtle background circles -->
+        <div class="absolute -top-10 -right-10 w-36 h-36 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+        <div class="absolute bottom-0 -left-10 w-28 h-28 bg-violet-400/20 rounded-full blur-xl pointer-events-none"></div>
+
+        <div class="max-w-md mx-auto flex items-center justify-between relative z-10">
+            <div class="flex items-center space-x-3">
+                <div class="p-2.5 bg-white/15 backdrop-blur-md rounded-2xl border border-white/20 shadow-inner">
+                    <i data-lucide="file-edit" class="w-6 h-6 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-wide leading-tight">ແກ້ໄຂຂໍ້ມູນປະຈຳວັນ</h1>
+                    <p class="text-xs text-indigo-200 font-normal">ລະບົບອັບເດດຂໍ້ມູນດ່ວນ</p>
+                </div>
+            </div>
+            <span id="connection-status" class="text-xs bg-black/20 backdrop-blur-md border border-white/15 px-3 py-1.5 rounded-full flex items-center gap-1.5 font-medium">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399] animate-pulse"></span>
+                <span>ອອນລາຍ</span>
+            </span>
+        </div>
+    </header>
+
+    <!-- Main Content Container Overlapping Header -->
+    <main class="flex-grow max-w-md w-full mx-auto px-4 -mt-10 pb-8 space-y-4 relative z-10">
+        
+        <!-- Notification / Message Box (Toast Style) -->
+        <div id="message-box" class="hidden rounded-2xl p-4 text-sm font-medium shadow-lg transition-all duration-300 flex items-start gap-3 backdrop-blur-md">
+            <i id="message-icon" data-lucide="info" class="w-5 h-5 shrink-0 mt-0.5"></i>
+            <span id="message-text" class="flex-grow leading-relaxed"></span>
+            <button onclick="hideMessage()" class="p-1 rounded-lg hover:bg-black/5 text-current opacity-70 hover:opacity-100 transition">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <!-- Edit Form Card -->
+        <form id="edit-form" class="bg-white rounded-3xl shadow-xl shadow-slate-200/70 border border-slate-100 p-5 sm:p-6 space-y-5">
+            
+            <!-- Hidden Record ID for precise updating -->
+            <input type="hidden" id="record_id" value="">
+
+            <!-- Section 1: User Information Group -->
+            <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/60 space-y-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-600">
+                        <i data-lucide="user-check" class="w-4 h-4"></i>
+                        <span>ຂໍ້ມູນຜູ້ໃຊ້ງານ</span>
+                    </div>
+                    <span id="user-filter-count" class="text-[11px] font-medium text-slate-400"></span>
+                </div>
+
+                <!-- Search Box for User ID / Name -->
+                <div>
+                    <div class="relative flex items-center">
+                        <div class="absolute left-3.5 text-indigo-500 pointer-events-none">
+                            <i data-lucide="search" class="w-4 h-4"></i>
+                        </div>
+                        <input type="text" id="user-search-input" placeholder="ຄົ້ນຫາລະຫັດ User ID ຫຼື ຊື່..."
+                            class="w-full pl-10 pr-9 py-2.5 bg-white border border-indigo-200/80 rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 shadow-2xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition">
+                        <button type="button" id="btn-clear-user-search" title="ລ້າງຄຳຄົ້ນຫາ"
+                            class="hidden absolute right-2.5 p-1 text-slate-400 hover:text-slate-600 rounded-lg transition">
+                            <i data-lucide="x" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 1. Textbox1: userid -->
+                <div>
+                    <label for="userid" class="block text-xs font-semibold text-slate-600 mb-1.5">
+                        1. ລະຫັດຜູ້ໃຊ້ (User ID)
+                    </label>
+                    <div class="relative flex items-center">
+                        <div class="absolute left-3.5 text-slate-400 pointer-events-none">
+                            <i data-lucide="hash" class="w-4 h-4"></i>
+                        </div>
+                        <select id="userid" required
+                            class="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-base font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none appearance-none cursor-pointer transition">
+                            <option value="">-- ເລືອກລະຫັດ User ID --</option>
+                        </select>
+                        <div class="absolute right-3.5 text-slate-400 pointer-events-none">
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Textbox2: name (from table user) -->
+                <div>
+                    <label for="username" class="block text-xs font-semibold text-slate-600 mb-1.5">
+                        2. ຊື່ ແລະ ນາມສະກຸນ (Name)
+                    </label>
+                    <div class="relative flex items-center">
+                        <div class="absolute left-3.5 text-slate-400 pointer-events-none">
+                            <i data-lucide="user" class="w-4 h-4"></i>
+                        </div>
+                        <select id="username" required
+                            class="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-base font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none appearance-none cursor-pointer transition">
+                            <option value="">-- ເລືອກຊື່ ແລະ ນາມສະກຸນ --</option>
+                        </select>
+                        <div id="user-loader" class="hidden absolute right-9">
+                            <div class="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                        <div class="absolute right-3.5 text-slate-400 pointer-events-none">
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 2: Date & Data Update Group -->
+            <div class="space-y-4 pt-1">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-600">
+                        <i data-lucide="sliders" class="w-4 h-4"></i>
+                        <span>ລາຍລະອຽດການແກ້ໄຂ</span>
+                    </div>
+                    <span id="data-status-badge" class="hidden text-xs px-2.5 py-1 rounded-full font-semibold shadow-2xs"></span>
+                </div>
+
+                <!-- 3. Textbox3: date (Format dd/MM/yyyy) -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label for="date_picker" class="block text-xs font-semibold text-slate-600 cursor-pointer">
+                            3. ວັນທີ (dd/MM/yyyy)
+                        </label>
+                        <!-- Quick Date Selection Chips -->
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" id="btn-date-yesterday"
+                                class="text-[11px] font-semibold px-2.5 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 active:scale-95 transition">
+                                ມື້ວານ
+                            </button>
+                            <button type="button" id="btn-date-today"
+                                class="text-[11px] font-semibold px-2.5 py-0.5 rounded-lg bg-indigo-100 hover:bg-indigo-200 text-indigo-700 active:scale-95 transition">
+                                ມື້ນີ້
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                        <!-- Previous Day Button -->
+                        <button type="button" id="btn-date-prev" title="ມື້ກ່ອນໜ້າ"
+                            class="p-3 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-xl text-slate-600 hover:text-indigo-600 active:scale-95 transition shrink-0 shadow-2xs">
+                            <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                        </button>
+
+                        <!-- Date Picker Trigger Area (Tappable anywhere inside) -->
+                        <label for="date_picker" id="date-trigger-box" class="relative flex-grow flex items-center group cursor-pointer select-none overflow-hidden rounded-xl">
+                            <div class="absolute left-3.5 text-indigo-600 pointer-events-none z-0">
+                                <i data-lucide="calendar-days" class="w-5 h-5"></i>
+                            </div>
+                            <!-- Visible Formatted Textbox -->
+                            <input type="text" id="date_display" placeholder="dd/MM/yyyy" readonly tabindex="-1"
+                                class="w-full pl-11 pr-9 py-3 bg-indigo-50/60 group-hover:bg-indigo-100/70 group-active:bg-indigo-100 border border-indigo-200 rounded-xl text-base font-bold text-indigo-950 text-center pointer-events-none transition">
+                            
+                            <div class="absolute right-3 text-indigo-500 pointer-events-none z-0">
+                                <i data-lucide="calendar" class="w-4 h-4"></i>
+                            </div>
+
+                            <!-- Native Date Picker Overlay covering 100% of box -->
+                            <input type="date" id="date_picker" aria-label="ເລືອກວັນທີ"
+                                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 appearance-none">
+                        </label>
+
+                        <!-- Next Day Button -->
+                        <button type="button" id="btn-date-next" title="ມື້ຖັດໄປ"
+                            class="p-3 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-xl text-slate-600 hover:text-indigo-600 active:scale-95 transition shrink-0 shadow-2xs">
+                            <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4. Textbox4: code (Fetched from data.code & selectable from code.code) -->
+                <div>
+                    <label for="code_input" class="block text-xs font-semibold text-slate-600 mb-1.5">
+                        4. ລະຫັດ (Code)
+                    </label>
+                    <div class="flex gap-2">
+                        <div class="relative flex-grow flex items-center">
+                            <div class="absolute left-3.5 text-slate-400 pointer-events-none">
+                                <i data-lucide="tag" class="w-4 h-4"></i>
+                            </div>
+                            <input type="text" id="code_input" placeholder="ລະຫັດ Code..." required readonly
+                                class="w-full pl-10 pr-9 py-3 bg-white border border-slate-200 rounded-xl text-base font-bold text-indigo-700 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition">
+                            <div id="data-loader" class="hidden absolute right-3">
+                                <div class="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                            </div>
+                        </div>
+                        <!-- Button to view list from table code.code -->
+                        <button type="button" id="btn-open-codes"
+                            class="px-4 py-3 bg-slate-800 hover:bg-slate-900 active:scale-95 text-white rounded-xl font-semibold text-sm flex items-center gap-1.5 shrink-0 shadow-md shadow-slate-300/60 transition">
+                            <i data-lucide="list-filter" class="w-4 h-4 text-indigo-300"></i>
+                            <span>ເລືອກ</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 5. Textbox5: comment -->
+                <div>
+                    <label for="comment_input" class="block text-xs font-semibold text-slate-600 mb-1.5">
+                        5. ໝາຍເຫດ (Comment)
+                    </label>
+                    <div class="relative">
+                        <textarea id="comment_input" rows="3" placeholder="ປ້ອນຄຳອະທິບາຍ ຫຼື ໝາຍເຫດເພີ່ມເຕີມ..."
+                            class="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-base text-slate-800 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition resize-none"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="pt-2">
+                <button type="submit" id="btn-save"
+                    class="w-full py-4 px-5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 active:scale-[0.98] text-white font-bold text-base rounded-2xl shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2.5 transition-all duration-200">
+                    <i data-lucide="check-circle" class="w-5 h-5"></i>
+                    <span id="btn-save-text">ບັນທຶກການແກ້ໄຂ</span>
+                </button>
+            </div>
+        </form>
+
+    </main>
+
+    <!-- Bottom Modal / Drawer for Selecting Code from table `code` -->
+    <div id="code-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex-col justify-end sm:justify-center items-center transition-opacity">
+        <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-[82vh] flex flex-col shadow-2xl overflow-hidden animate-slide-up">
+            <!-- Mobile Drag Handle Indicator -->
+            <div class="w-full flex justify-center pt-2.5 pb-1 bg-slate-50 sm:hidden">
+                <div class="w-10 h-1.5 bg-slate-300 rounded-full"></div>
+            </div>
+
+            <!-- Modal Header -->
+            <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div class="flex items-center gap-2.5">
+                    <div class="p-2 bg-indigo-100 text-indigo-600 rounded-xl">
+                        <i data-lucide="layers" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-base leading-tight">ເລືອກລາຍການ Code</h3>
+                        <p class="text-xs text-slate-400">ແຕະເພື່ອເລືອກລະຫັດທີ່ຕ້ອງການ</p>
+                    </div>
+                </div>
+                <button type="button" id="btn-close-modal" class="p-2 bg-slate-200/70 hover:bg-slate-300 rounded-full text-slate-600 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Search Filter inside Modal -->
+            <div class="p-3.5 border-b border-slate-100 bg-white">
+                <div class="relative">
+                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3"></i>
+                    <input type="text" id="modal-search" placeholder="ຄົ້ນຫາລະຫັດ code ຫຼື ຄຳອະທິບາຍ..."
+                        class="w-full pl-10 pr-4 py-2.5 bg-slate-100 border border-transparent focus:bg-white focus:border-indigo-500 rounded-xl text-sm outline-none transition">
+                </div>
+            </div>
+
+            <!-- Code List Container -->
+            <div id="code-list-container" class="p-3.5 overflow-y-auto space-y-2.5 flex-grow min-h-[220px] bg-slate-50/50">
+                <!-- Items injected via JS -->
+                <div class="text-center py-8 text-slate-400 text-sm">ກຳລັງໂຫຼດຂໍ້ມູນ...</div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Added: global loading screen; does not replace or modify existing components -->
+    <div id="global-loading-overlay" role="status" aria-live="polite" aria-hidden="true">
+        <div class="loading-card">
+            <div class="loading-orbit">
+                <i data-lucide="database" class="w-7 h-7 text-indigo-600"></i>
+            </div>
+            <div class="text-base font-bold text-slate-800" id="global-loading-title">ກຳລັງໂຫຼດຂໍ້ມູນ...</div>
+            <div class="text-xs text-slate-500 mt-1.5" id="global-loading-detail">ກະລຸນາລໍຖ້າຈັກໜ້ອຍ</div>
+            <div class="loading-progress"><span></span></div>
+            <div class="text-[10px] text-slate-400 mt-3 tracking-wide">PLEASE WAIT</div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // ---------------------------------------------------------
+        // 1. SUPABASE CONFIGURATION
+        // ---------------------------------------------------------
+        const SUPABASE_URL = 'https://uyxfzbxfehjaqikxdghd.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_i8bNz497PnEgGuOXZgu9kA_pY8Ei4DC';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // ---------------------------------------------------------
+        // 2. DOM ELEMENTS & STATE
+        // ---------------------------------------------------------
+        const elUserSearchInput = document.getElementById('user-search-input');
+        const btnClearUserSearch = document.getElementById('btn-clear-user-search');
+        const elUserFilterCount = document.getElementById('user-filter-count');
+        const elUserId = document.getElementById('userid');
+        const elUserName = document.getElementById('username');
+        const elDateDisplay = document.getElementById('date_display');
+        const elDatePicker = document.getElementById('date_picker');
+        const elCodeInput = document.getElementById('code_input');
+        const elCommentInput = document.getElementById('comment_input');
+        const elRecordId = document.getElementById('record_id');
+
+        const btnOpenCodes = document.getElementById('btn-open-codes');
+        const btnCloseModal = document.getElementById('btn-close-modal');
+        const elCodeModal = document.getElementById('code-modal');
+        const elCodeListContainer = document.getElementById('code-list-container');
+        const elModalSearch = document.getElementById('modal-search');
+        const elEditForm = document.getElementById('edit-form');
+        const btnSave = document.getElementById('btn-save');
+        const btnSaveText = document.getElementById('btn-save-text');
+
+        const userLoader = document.getElementById('user-loader');
+        const dataLoader = document.getElementById('data-loader');
+        const dataStatusBadge = document.getElementById('data-status-badge');
+
+        let allCodesCache = []; // Store fetched codes for fast filtering
+        let allUsersCache = []; // Store fetched users for fast filtering
+
+        // ---------------------------------------------------------
+        // 3. HELPER FUNCTIONS (UI & DATE FORMATTING)
+        // ---------------------------------------------------------
+        function showMessage(text, type = 'info') {
+            const box = document.getElementById('message-box');
+            const msgText = document.getElementById('message-text');
+            const msgIcon = document.getElementById('message-icon');
+
+            box.className = 'rounded-2xl p-4 text-sm font-medium shadow-lg transition-all duration-300 flex items-start gap-3 backdrop-blur-md ';
+            
+            if (type === 'success') {
+                box.classList.add('bg-emerald-50/95', 'text-emerald-800', 'border', 'border-emerald-200');
+                msgIcon.setAttribute('data-lucide', 'check-circle-2');
+            } else if (type === 'error') {
+                box.classList.add('bg-rose-50/95', 'text-rose-800', 'border', 'border-rose-200');
+                msgIcon.setAttribute('data-lucide', 'alert-circle');
+            } else {
+                box.classList.add('bg-blue-50/95', 'text-blue-800', 'border', 'border-blue-200');
+                msgIcon.setAttribute('data-lucide', 'info');
+            }
+
+            msgText.textContent = text;
+            box.classList.remove('hidden');
+            lucide.createIcons();
+
+            // Auto hide success messages after 4 seconds
+            if (type === 'success') {
+                setTimeout(hideMessage, 4000);
+            }
+        }
+
+        function hideMessage() {
+            document.getElementById('message-box').classList.add('hidden');
+        }
+
+        // Convert YYYY-MM-DD (from HTML date input) to dd/MM/yyyy
+        function formatToDDMMYYYY(isoDateStr) {
+            if (!isoDateStr) return '';
+            const parts = isoDateStr.split('-');
+            if (parts.length !== 3) return isoDateStr;
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+
+        // Set default date to today on load
+        function initTodayDate() {
+            setDateFromOffset(0);
+        }
+
+        // Helper to set date by day offset from today (0 = today, -1 = yesterday)
+        function setDateFromOffset(daysOffset) {
+            const target = new Date();
+            target.setDate(target.getDate() + daysOffset);
+            applyDateObject(target);
+        }
+
+        // Helper to shift current selected date by delta days (-1 or +1)
+        function shiftSelectedDate(deltaDays) {
+            let baseDate = new Date();
+            if (elDatePicker.value) {
+                const [y, m, d] = elDatePicker.value.split('-').map(Number);
+                baseDate = new Date(y, m - 1, d);
+            }
+            baseDate.setDate(baseDate.getDate() + deltaDays);
+            applyDateObject(baseDate);
+            fetchDataRecord();
+        }
+
+        // Apply JS Date object to picker & display textbox
+        function applyDateObject(dateObj) {
+            const yyyy = dateObj.getFullYear();
+            const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const dd = String(dateObj.getDate()).padStart(2, '0');
+            const iso = `${yyyy}-${mm}-${dd}`;
+
+            elDatePicker.value = iso;
+            elDateDisplay.value = `${dd}/${mm}/${yyyy}`;
+        }
+
+        // Smoothly scroll to the bottom after a user is selected.
+        function scrollToFormBottom() {
+            requestAnimationFrame(() => {
+                window.scrollTo({
+                    top: document.documentElement.scrollHeight,
+                    behavior: 'smooth'
+                });
+            });
+        }
+
+        // ---------------------------------------------------------
+        // 4. DATABASE OPERATIONS (SUPABASE)
+        // ---------------------------------------------------------
+
+        // Load all users from `user` table and populate both User ID and Name select boxes
+        async function loadUsersList(preselectId = null) {
+            showGlobalLoading('ກຳລັງເຂົ້າສູ່ລະບົບ...', 'ກຳລັງໂຫຼດຂໍ້ມູນຜູ້ໃຊ້ ແລະ ກະກຽມໜ້າຈໍ');
+            userLoader.classList.remove('hidden');
+            try {
+                const { data, error } = await supabaseClient
+                    .from('user')
+                    .select('*');
+
+                if (error) throw error;
+
+                allUsersCache = data || [];
+                populateUserSelects(allUsersCache);
+
+                if (preselectId) {
+                    elUserId.value = preselectId;
+                    elUserName.value = preselectId;
+                    if (elDatePicker.value) {
+                        await fetchDataRecord();
+                    }
+                    scrollToFormBottom();
+                }
+            } catch (err) {
+                console.error('Error loading users:', err);
+                showMessage(`ໂຫຼດລາຍຊື່ຜູ້ໃຊ້ບໍ່ສຳເລັດ: ${err.message}`, 'error');
+            } finally {
+                userLoader.classList.add('hidden');
+                hideGlobalLoading();
+            }
+        }
+
+        // Populate dropdown options for both `userid` and `username`
+        function populateUserSelects(users, preserveSelectedId = '') {
+            let idOptionsHtml = '<option value="">-- ເລືອກລະຫັດ User ID --</option>';
+            let nameOptionsHtml = '<option value="">-- ເລືອກຊື່ ແລະ ນາມສະກຸນ --</option>';
+
+            users.forEach(item => {
+                const uidVal = String(item.userid !== undefined && item.userid !== null ? item.userid : (item.id || ''));
+                const nameVal = item.name || '(ບໍ່ມີຊື່)';
+                if (uidVal) {
+                    idOptionsHtml += `<option value="${uidVal}">${uidVal}</option>`;
+                    nameOptionsHtml += `<option value="${uidVal}">${nameVal}</option>`;
+                }
+            });
+
+            elUserId.innerHTML = idOptionsHtml;
+            elUserName.innerHTML = nameOptionsHtml;
+
+            if (preserveSelectedId && users.some(u => String(u.userid ?? u.id ?? '') === preserveSelectedId)) {
+                elUserId.value = preserveSelectedId;
+                elUserName.value = preserveSelectedId;
+            }
+
+            if (elUserFilterCount) {
+                elUserFilterCount.textContent = users.length > 0 ? `ທັງໝົດ ${users.length} ລາຍການ` : 'ບໍ່ພົບຂໍ້ມູນ';
+            }
+        }
+
+        // Filter users by ID or Name from search box
+        function handleUserSearchFilter() {
+            const term = elUserSearchInput.value.trim().toLowerCase();
+            
+            if (term.length > 0) {
+                btnClearUserSearch.classList.remove('hidden');
+            } else {
+                btnClearUserSearch.classList.add('hidden');
+                // Clear all selected user & fetched form data when search is cleared
+                populateUserSelects(allUsersCache, '');
+                elUserId.value = '';
+                elUserName.value = '';
+                elRecordId.value = '';
+                elCodeInput.value = '';
+                elCommentInput.value = '';
+                dataStatusBadge.classList.add('hidden');
+                hideMessage();
+                return;
+            }
+
+            const filtered = allUsersCache.filter(item => {
+                const uidVal = String(item.userid !== undefined && item.userid !== null ? item.userid : (item.id || '')).toLowerCase();
+                const nameVal = (item.name || '').toLowerCase();
+                return uidVal.includes(term) || nameVal.includes(term);
+            });
+
+            // Check if user typed an exact ID match (or only 1 result remains)
+            const exactMatch = filtered.find(item => {
+                const uidVal = String(item.userid !== undefined && item.userid !== null ? item.userid : (item.id || '')).toLowerCase();
+                return term !== '' && uidVal === term;
+            });
+
+            const autoSelectItem = exactMatch || (term !== '' && filtered.length === 1 ? filtered[0] : null);
+            const targetId = autoSelectItem
+                ? String(autoSelectItem.userid !== undefined && autoSelectItem.userid !== null ? autoSelectItem.userid : (autoSelectItem.id || ''))
+                : elUserId.value;
+
+            populateUserSelects(filtered, targetId);
+
+            if (autoSelectItem && targetId) {
+                elUserId.value = targetId;
+                elUserName.value = targetId;
+                if (elDatePicker.value) {
+                    fetchDataRecord();
+                }
+                scrollToFormBottom();
+            }
+        }
+
+        // Fetch `code` and `comment` from `data` table when Date & UserID are selected
+        async function fetchDataRecord() {
+            const uid = elUserId.value.trim();
+            const isoDate = elDatePicker.value; // YYYY-MM-DD
+            const formattedDate = elDateDisplay.value; // dd/MM/yyyy
+
+            if (!uid || !isoDate) return;
+
+            dataLoader.classList.remove('hidden');
+            dataStatusBadge.classList.add('hidden');
+            elRecordId.value = '';
+
+            try {
+                // Query table `data` matching userid and date (supports either YYYY-MM-DD or dd/MM/yyyy stored in DB)
+                const { data, error } = await supabaseClient
+                    .from('data')
+                    .select('*')
+                    .eq('userid', uid)
+                    .or(`date.eq.${isoDate},date.eq.${formattedDate}`)
+                    .limit(1)
+                    .maybeSingle();
+
+                if (error) throw error;
+
+                if (data) {
+                    // Record found! Populate textbox4 (code) and textbox5 (comment)
+                    elRecordId.value = data.id || '';
+                    elCodeInput.value = data.code || '';
+                    elCommentInput.value = data.comment || '';
+
+                    dataStatusBadge.textContent = '✓ ພົບຂໍ້ມູນແລ້ວ';
+                    dataStatusBadge.className = 'text-xs px-2.5 py-1 rounded-full font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200/60';
+                    dataStatusBadge.classList.remove('hidden');
+                } else {
+                    // No record found for this user + date
+                    elCodeInput.value = '';
+                    elCommentInput.value = '';
+
+                    dataStatusBadge.textContent = '! ບໍ່ພົບຂໍ້ມູນວັນທີນີ້';
+                    dataStatusBadge.className = 'text-xs px-2.5 py-1 rounded-full font-semibold bg-amber-100 text-amber-700 border border-amber-200/60';
+                    dataStatusBadge.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error('Error fetching data record:', err);
+                showMessage(`ດຶງຂໍ້ມູນບໍ່ສຳເລັດ: ${err.message}`, 'error');
+            } finally {
+                dataLoader.classList.add('hidden');
+            }
+        }
+
+        // Fetch all codes from `code` table for the modal list
+        async function loadCodesList() {
+            elCodeListContainer.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-10 text-slate-400">
+                    <div class="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mb-2"></div>
+                    <span class="text-sm">ກຳລັງໂຫຼດລາຍການ Code...</span>
+                </div>
+            `;
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('code')
+                    .select('*');
+
+                if (error) throw error;
+
+                allCodesCache = data || [];
+                renderCodeList(allCodesCache);
+            } catch (err) {
+                console.error('Error loading codes:', err);
+                elCodeListContainer.innerHTML = `
+                    <div class="text-center py-8 text-rose-500 text-sm">
+                        ເກີດຂໍ້ຜິດພາດ: ${err.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Render code items inside modal
+        function renderCodeList(items) {
+            if (!items || items.length === 0) {
+                elCodeListContainer.innerHTML = `
+                    <div class="text-center py-8 text-slate-400 text-sm">ບໍ່ພົບລາຍການ Code</div>
+                `;
+                return;
+            }
+
+            const currentCode = elCodeInput.value.trim();
+
+            elCodeListContainer.innerHTML = items.map(item => {
+                const codeVal = item.code || '';
+                const descVal = item.name || item.description || item.detail || '';
+                const isSelected = codeVal === currentCode && currentCode !== '';
+                
+                return `
+                    <button type="button" onclick="selectCodeItem('${codeVal.replace(/'/g, "\\'")}')"
+                        class="w-full text-left p-3.5 rounded-2xl border ${isSelected ? 'border-indigo-500 bg-indigo-50/80 ring-1 ring-indigo-500' : 'border-slate-200/80 bg-white hover:border-indigo-400 hover:bg-indigo-50/40'} active:scale-[0.99] transition flex items-center justify-between group shadow-2xs">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-600'} flex items-center justify-center font-bold text-xs shrink-0 transition">
+                                <i data-lucide="tag" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <div class="font-bold ${isSelected ? 'text-indigo-900' : 'text-slate-800 group-hover:text-indigo-700'} text-base">${codeVal}</div>
+                                ${descVal ? `<div class="text-xs text-slate-500 mt-0.5">${descVal}</div>` : ''}
+                            </div>
+                        </div>
+                        ${isSelected 
+                            ? `<span class="text-xs font-semibold text-indigo-600 bg-indigo-100 px-2 py-1 rounded-lg">ເລືອກຢູ່</span>`
+                            : `<i data-lucide="chevron-right" class="w-5 h-5 text-slate-300 group-hover:text-indigo-600 transition"></i>`
+                        }
+                    </button>
+                `;
+            }).join('');
+            
+            lucide.createIcons();
+        }
+
+        // Select a code from the modal and close it
+        window.selectCodeItem = function(selectedCode) {
+            elCodeInput.value = selectedCode;
+            closeModal();
+        };
+
+        // Save / Update ONLY `code` and `comment` in `data` table
+        async function saveEditData(e) {
+            e.preventDefault();
+            hideMessage();
+
+            const uid = elUserId.value.trim();
+            const isoDate = elDatePicker.value;
+            const formattedDate = elDateDisplay.value;
+            const newCode = elCodeInput.value.trim();
+            const newComment = elCommentInput.value.trim();
+            const recordId = elRecordId.value;
+
+            if (!uid) {
+                showMessage('ກະລຸນາເລືອກ User ID ຫຼື ຊື່ຜູ້ໃຊ້ກ່ອນ', 'error');
+                elUserId.focus();
+                return;
+            }
+            if (!isoDate) {
+                showMessage('ກະລຸນາເລືອກວັນທີ', 'error');
+                return;
+            }
+
+            // Set loading state on save button and global overlay
+            showGlobalLoading('ກຳລັງບັນທຶກຂໍ້ມູນ...', 'ກຳລັງອັບເດດ Code ແລະ Comment ໃນລະບົບ');
+            btnSave.disabled = true;
+            btnSaveText.textContent = 'ກຳລັງບັນທຶກ...';
+
+            try {
+                let query = supabaseClient
+                    .from('data')
+                    .update({
+                        code: newCode,
+                        comment: newComment
+                    });
+
+                // Update by primary key `id` if we fetched it, otherwise filter by `userid` + `date`
+                if (recordId) {
+                    query = query.eq('id', recordId);
+                } else {
+                    query = query
+                        .eq('userid', uid)
+                        .or(`date.eq.${isoDate},date.eq.${formattedDate}`);
+                }
+
+                const { data, error } = await query.select();
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    showMessage('ບັນທຶກການແກ້ໄຂ (Code ແລະ Comment) ສຳເລັດແລ້ວ!', 'success');
+                    elRecordId.value = data[0].id || recordId;
+                    dataStatusBadge.textContent = '✓ ບັນທຶກສຳເລັດ';
+                    dataStatusBadge.className = 'text-xs px-2.5 py-1 rounded-full font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200/60';
+                    dataStatusBadge.classList.remove('hidden');
+                } else {
+                    showMessage('ບໍ່ພົບແຖວຂໍ້ມູນທີ່ຈະແກ້ໄຂໃນຕາຕະລາງ data (ກວດສອບ User ID ແລະ ວັນທີອີກຄັ້ງ)', 'error');
+                }
+            } catch (err) {
+                console.error('Save error:', err);
+                showMessage(`ບັນທຶກບໍ່ສຳເລັດ: ${err.message}`, 'error');
+            } finally {
+                btnSave.disabled = false;
+                btnSaveText.textContent = 'ບັນທຶກການແກ້ໄຂ';
+                hideGlobalLoading();
+            }
+        }
+
+        // ---------------------------------------------------------
+        // 5. EVENT LISTENERS
+        // ---------------------------------------------------------
+
+        // Filter User ID & Name dropdowns on search input
+        elUserSearchInput.addEventListener('input', handleUserSearchFilter);
+
+        // Clear search box
+        btnClearUserSearch.addEventListener('click', () => {
+            elUserSearchInput.value = '';
+            handleUserSearchFilter();
+            elUserSearchInput.focus();
+        });
+        
+        // Sync User ID -> Name & fetch daily data
+        elUserId.addEventListener('change', async () => {
+            const selectedId = elUserId.value;
+            elUserName.value = selectedId;
+            hideMessage();
+            if (selectedId && elDatePicker.value) {
+                await fetchDataRecord();
+                scrollToFormBottom();
+            } else {
+                elCodeInput.value = '';
+                elCommentInput.value = '';
+                dataStatusBadge.classList.add('hidden');
+            }
+        });
+
+        // Sync Name -> User ID & fetch daily data
+        elUserName.addEventListener('change', async () => {
+            const selectedId = elUserName.value;
+            elUserId.value = selectedId;
+            hideMessage();
+            if (selectedId && elDatePicker.value) {
+                await fetchDataRecord();
+                scrollToFormBottom();
+            } else {
+                elCodeInput.value = '';
+                elCommentInput.value = '';
+                dataStatusBadge.classList.add('hidden');
+            }
+        });
+
+        // Date picker change -> Format dd/MM/yyyy & fetch `data.code`
+        elDatePicker.addEventListener('change', (e) => {
+            const isoVal = e.target.value;
+            elDateDisplay.value = formatToDDMMYYYY(isoVal);
+            fetchDataRecord();
+        });
+
+        // Quick date buttons & prev/next day navigation
+        document.getElementById('btn-date-prev').addEventListener('click', () => shiftSelectedDate(-1));
+        document.getElementById('btn-date-next').addEventListener('click', () => shiftSelectedDate(1));
+        document.getElementById('btn-date-today').addEventListener('click', () => {
+            setDateFromOffset(0);
+            fetchDataRecord();
+        });
+        document.getElementById('btn-date-yesterday').addEventListener('click', () => {
+            setDateFromOffset(-1);
+            fetchDataRecord();
+        });
+
+        // Ensure tapping anywhere on date box reliably opens native calendar on modern mobile browsers
+        document.getElementById('date-trigger-box').addEventListener('click', (e) => {
+            if (typeof elDatePicker.showPicker === 'function') {
+                try {
+                    elDatePicker.showPicker();
+                } catch (err) {
+                    elDatePicker.focus();
+                }
+            } else {
+                elDatePicker.focus();
+            }
+        });
+
+        // Open Code selection modal
+        btnOpenCodes.addEventListener('click', () => {
+            elCodeModal.classList.remove('hidden');
+            elCodeModal.classList.add('flex');
+            elModalSearch.value = '';
+            loadCodesList();
+        });
+
+        // Close Modal
+        function closeModal() {
+            elCodeModal.classList.add('hidden');
+            elCodeModal.classList.remove('flex');
+        }
+        btnCloseModal.addEventListener('click', closeModal);
+        elCodeModal.addEventListener('click', (e) => {
+            if (e.target === elCodeModal) closeModal();
+        });
+
+        // Filter codes in modal
+        elModalSearch.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase().trim();
+            const filtered = allCodesCache.filter(item => {
+                const c = (item.code || '').toLowerCase();
+                const d = (item.name || item.description || '').toLowerCase();
+                return c.includes(term) || d.includes(term);
+            });
+            renderCodeList(filtered);
+        });
+
+        // Form submit -> Update database
+        elEditForm.addEventListener('submit', saveEditData);
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            initTodayDate();
+            const urlParams = new URLSearchParams(window.location.search);
+            const paramUser = urlParams.get('userid');
+            loadUsersList(paramUser);
+        });
+
+
+        // ---------------------------------------------------------
+        // ADDED: LOADING INDICATOR (INITIAL PAGE LOAD + SAVE ONLY)
+        // ---------------------------------------------------------
+        const globalLoadingOverlay = document.getElementById('global-loading-overlay');
+        const globalLoadingTitle = document.getElementById('global-loading-title');
+        const globalLoadingDetail = document.getElementById('global-loading-detail');
+
+        function showGlobalLoading(titleText, detailText) {
+            if (!globalLoadingOverlay) return;
+            globalLoadingTitle.textContent = titleText || 'ກຳລັງໂຫຼດຂໍ້ມູນ...';
+            globalLoadingDetail.textContent = detailText || 'ກະລຸນາລໍຖ້າຈັກໜ້ອຍ';
+            globalLoadingOverlay.classList.add('is-visible');
+            globalLoadingOverlay.setAttribute('aria-hidden', 'false');
+        }
+
+        function hideGlobalLoading() {
+            if (!globalLoadingOverlay) return;
+            globalLoadingOverlay.classList.remove('is-visible');
+            globalLoadingOverlay.setAttribute('aria-hidden', 'true');
+        }
+
+    </script>
+</body>
+</html>
