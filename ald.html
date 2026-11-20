@@ -1,0 +1,2282 @@
+<!DOCTYPE html>
+<html lang="lo">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ລະບົບຈັດການຂໍ້ມູນ User, Code & Data</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- SheetJS (XLSX) for reading/writing basic Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <!-- ExcelJS for advanced styling (Borders, A4 Landscape, Text Rotation, Times New Roman) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <!-- SweetAlert2 for interactive Export Section selection -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Google Fonts: Noto Sans Lao for UI labels, Times New Roman for Data & Tables -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* กำหนด Font หลัก */
+        body {
+            font-family: 'Noto Sans Lao', sans-serif;
+            background-color: #f3f4f6;
+        }
+        
+        /* กำหนด Font Times New Roman ตามความต้องการสำหรับตารางและข้อมูล */
+        .font-tnr {
+            font-family: 'Times New Roman', Times, serif !important;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="text-gray-800 antialiased min-h-screen flex flex-col">
+
+    <!-- Header & Connection Status Bar -->
+    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 p-2 rounded-lg">
+                    <i class="fa-solid fa-table-list text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg sm:text-xl font-bold leading-tight">ລະບົບຈັດການຂໍ້ມູນ & ຕາຕະລາງ</h1>
+                    <p class="text-xs text-slate-400 font-tnr">Supabase Management System</p>
+                </div>
+            </div>
+
+            <!-- Connection Status & SQL Button -->
+            <div class="flex items-center space-x-2 sm:space-x-4">
+                <div id="connection-status" class="flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-800 border border-slate-700">
+                    <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse"></span>
+                    <span id="status-text">ກຳລັງເຊື່ອມຕໍ່ Supabase...</span>
+                </div>
+                <button onclick="openSqlModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm px-3 py-1.5 rounded-lg shadow transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-database"></i>
+                    <span class="hidden sm:inline">SQL Code</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="bg-slate-800 border-t border-slate-700">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-1 sm:space-x-4 overflow-x-auto">
+                <button onclick="switchTab('data')" id="tab-data" class="tab-btn active px-4 py-3 text-sm font-medium border-b-2 border-blue-500 text-blue-400 flex items-center gap-2 whitespace-nowrap transition">
+                    <i class="fa-solid fa-calendar-days"></i> ຈັດການ Data (ຕາຕະລາງ)
+                </button>
+                <button onclick="switchTab('user')" id="tab-user" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-300 hover:text-white flex items-center gap-2 whitespace-nowrap transition">
+                    <i class="fa-solid fa-users"></i> ຈັດການ User (ພະນັກງານ)
+                </button>
+                <button onclick="switchTab('code')" id="tab-code" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-300 hover:text-white flex items-center gap-2 whitespace-nowrap transition">
+                    <i class="fa-solid fa-code"></i> ຈັດການ Code (ລະຫັດ)
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        <!-- Toast / Notification Container -->
+        <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+
+        <!-- ==================== TAB 1: DATA MANAGEMENT ==================== -->
+        <section id="section-data" class="space-y-4">
+            <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+                <div class="space-y-4 pb-4 border-b border-gray-100">
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                        <div class="min-w-0">
+                            <h2 class="text-lg font-bold text-gray-800">ຈັດການຂໍ້ມູນຕາຕະລາງ (Data)</h2>
+                            <p class="text-xs text-gray-500 mt-1">ສະແດງຂໍ້ມູນແບບຕາຕະລາງກວດສອບຄື Excel (ສາມາດສະຫຼັບເປັນລາຍການໄດ້)</p>
+                        </div>
+                        <span class="inline-flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-3 py-1.5 self-start">
+                            <i class="fa-solid fa-table-cells"></i> Data Workspace
+                        </span>
+                    </div>
+
+                    <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-xs font-semibold text-gray-500 mr-1">ມຸມມອງ:</span>
+                            <div class="inline-flex rounded-xl border border-gray-200 bg-gray-100 p-1 shadow-inner">
+                                <button type="button" id="btn-view-excel" onclick="switchDataView('excel')" class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-white text-emerald-700 shadow-sm transition flex items-center gap-2">
+                                    <i class="fa-solid fa-table-cells"></i> ກວດສອບແບບ Excel
+                                </button>
+                                <button type="button" id="btn-view-list" onclick="switchDataView('list')" class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium text-gray-600 hover:bg-white hover:text-blue-700 transition flex items-center gap-2">
+                                    <i class="fa-solid fa-list"></i> ລາຍການ
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button" onclick="openDataModal()" class="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm hover:shadow transition">
+                                <i class="fa-solid fa-plus"></i> ເພີ່ມຂໍ້ມູນ
+                            </button>
+                            <label class="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm hover:shadow cursor-pointer transition">
+                                <i class="fa-solid fa-file-import"></i> Import Excel
+                                <input type="file" id="import-data-excel" accept=".xlsx, .xls" class="hidden" onchange="importDataExcel(event)">
+                            </label>
+                            <button type="button" onclick="exportDataExcel()" class="inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm hover:shadow transition">
+                                <i class="fa-solid fa-file-export"></i> Export A4
+                            </button>
+                            <button type="button" onclick="exportDataExcelCalendar()" class="inline-flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm hover:shadow transition">
+                                <i class="fa-solid fa-calendar-days"></i> Export ປະຕິທິນ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filter & Search -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 my-4 items-end">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">ຄົ້ນຫາທົ່ວໄປ</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-search absolute left-3 top-3 text-gray-400 text-sm"></i>
+                            <input type="text" id="search-data" onkeyup="refreshDataViews()" placeholder="UserID, ຊື່, Code..." class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm font-tnr focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">ວັນທີເລີ່ມຕົ້ນ (Start Date)</label>
+                        <input type="date" id="filter-data-start" onchange="refreshDataViews()" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-tnr focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">ວັນທີສິ້ນສຸດ (End Date)</label>
+                        <input type="date" id="filter-data-end" onchange="refreshDataViews()" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-tnr focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <div class="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                        <i class="fa-solid fa-list-check text-slate-400"></i>
+                        ຈັດການລາຍການທີ່ເລືອກ
+                        <span id="data-count" class="font-normal text-gray-500 ml-1">ທັງໝົດ: 0 ລາຍການ</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" onclick="clearDataFilters()" class="text-xs px-3.5 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-100 transition"><i class="fa-solid fa-rotate-left mr-1"></i>ລ້າງຕົວກອງ</button>
+                        <button type="button" onclick="confirmDeleteDataByDateRange()" class="text-xs px-3.5 py-2 rounded-lg bg-white border border-orange-200 text-orange-700 hover:bg-orange-50 transition" title="ລຶບຂໍ້ມູນຕາມຊ່ວງວັນທີທີ່ເລືອກ"><i class="fa-solid fa-calendar-xmark mr-1"></i>ລຶບຕາມວັນທີ</button>
+                        <button type="button" onclick="deleteSelected('data')" class="text-xs px-3.5 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition"><i class="fa-solid fa-trash mr-1"></i>ລົບທີ່ເລືອກ</button>
+                        <button type="button" onclick="deleteAll('data')" class="text-xs px-3.5 py-2 rounded-lg bg-red-800 text-white hover:bg-red-900 transition"><i class="fa-solid fa-trash-can mr-1"></i>ລົບທັງໝົດ</button>
+                    </div>
+                </div>
+
+                <!-- Data Table: List View (Times New Roman) -->
+                <div id="data-list-container" class="hidden overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200 font-tnr">
+                        <thead class="bg-gray-50 text-gray-700 text-sm">
+                            <tr>
+                                <th class="px-3 py-3 text-center"><input type="checkbox" onchange="toggleVisibleSelection('data', this.checked)" title="ເລືອກທັງໝົດ"></th>
+                                <th class="px-4 py-3 text-left font-bold">dataid</th>
+                                <th class="px-4 py-3 text-left font-bold">userid</th>
+                                <th class="px-4 py-3 text-left font-bold">Name (Reference)</th>
+                                <th class="px-4 py-3 text-center font-bold">code</th>
+                                <th class="px-4 py-3 text-center font-bold">date (dd/MM/yyyy)</th>
+                                <th class="px-4 py-3 text-center font-bold">ຈັດການ (Actions)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="data-table-body" class="bg-white divide-y divide-gray-200 text-sm">
+                            <!-- Rows injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="data-pagination" class="hidden flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-3 py-3 border border-t-0 border-gray-200 rounded-b-lg bg-gray-50">
+                    <div id="data-pagination-info" class="text-xs text-gray-600 font-tnr"></div>
+                    <div id="data-pagination-controls" class="flex flex-wrap items-center justify-center sm:justify-end gap-1"></div>
+                </div>
+
+                <!-- Import Excel Preview: ตรวจสอบข้อมูลก่อนบันทึก -->
+                <div id="import-preview-panel" class="hidden mb-4 border-2 border-emerald-300 rounded-xl overflow-hidden bg-white">
+                    <div class="flex flex-wrap items-center justify-between gap-3 bg-emerald-50 px-4 py-3 border-b border-emerald-200">
+                        <div>
+                            <h3 class="font-bold text-emerald-900"><i class="fa-solid fa-file-circle-check mr-1"></i> Import Preview (Excel Matrix)</h3>
+                            <p id="import-preview-summary" class="text-xs text-emerald-800 mt-1"></p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="cancelDataImportPreview()" class="px-3 py-2 rounded-lg text-xs bg-gray-100 hover:bg-gray-200 text-gray-700">ຍົກເລີກ</button>
+                            <button type="button" id="btn-confirm-data-import" onclick="confirmDataImport()" class="px-4 py-2 rounded-lg text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold"><i class="fa-solid fa-cloud-arrow-up mr-1"></i> ບັນທຶກລາຍການໃໝ່</button>
+                        </div>
+                    </div>
+                    <div class="overflow-auto max-h-[65vh]">
+                        <table id="import-preview-table" class="border-collapse font-tnr text-black text-sm w-max min-w-full"></table>
+                    </div>
+                    <div class="px-4 py-2 bg-gray-50 border-t text-xs text-gray-600">
+                        <span class="inline-block w-3 h-3 bg-emerald-100 border border-emerald-400 align-middle mr-1"></span> ລາຍການໃໝ່ ຈະບັນທຶກ
+                        <span class="inline-block w-3 h-3 bg-red-100 border border-red-400 align-middle ml-3 mr-1"></span> ມີ userid + date ແລ້ວ ຂ້າມບໍ່ບັນທຶກ
+                    </div>
+                </div>
+
+                <!-- Data Table: Excel Matrix Preview View (Times New Roman) -->
+                <div id="data-excel-container" class="space-y-2">
+                    <div class="flex items-center justify-between bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg text-xs text-amber-800">
+                        <span><i class="fa-solid fa-circle-info mr-1"></i> <b>ໂໝດກວດສອບຕາຕະລາງຄື Excel:</b> ສາມາດກົດໃສ່ແຕ່ລະຊ່ອງວັນທີຂອງພະນັກງານ ເພື່ອເພີ່ມ ຫຼື ແກ້ໄຂຂໍ້ມູນໄດ້ທັນທີ</span>
+                    </div>
+                    <div class="overflow-x-auto rounded-lg border border-black shadow-sm max-h-[65vh]">
+                        <table id="excel-preview-table" class="border-collapse font-tnr text-black bg-white w-max min-w-full">
+                            <!-- Matrix Head & Body injected by JS -->
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 2: USER MANAGEMENT ==================== -->
+        <section id="section-user" class="hidden space-y-4">
+            <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-800">ຈັດການຂໍ້ມູນພະນັກງານ (User)</h2>
+                        <p class="text-xs text-gray-500">ຕາຕະລາງ <span class="font-tnr font-bold">user</span> (userid int4, name varchar, section varchar) - Font: Times New Roman</p>
+                    </div>
+                    
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="openUserModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg text-sm font-medium shadow-sm flex items-center gap-1.5 transition">
+                            <i class="fa-solid fa-user-plus"></i> ເພີ່ມ User
+                        </button>
+                        
+                        <label class="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-lg text-sm font-medium shadow-sm flex items-center gap-1.5 cursor-pointer transition">
+                            <i class="fa-solid fa-file-import"></i> Import Excel
+                            <input type="file" id="import-user-excel" accept=".xlsx, .xls" class="hidden" onchange="importUserExcel(event)">
+                        </label>
+
+                        <button onclick="exportUserExcel()" class="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-2 rounded-lg text-sm font-medium shadow-sm flex items-center gap-1.5 transition">
+                            <i class="fa-solid fa-file-export"></i> Export Excel (A4)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search User -->
+                <div class="my-4 flex flex-col sm:flex-row justify-between gap-3">
+                    <div class="relative w-full sm:w-80">
+                        <i class="fa-solid fa-search absolute left-3 top-3 text-gray-400 text-sm"></i>
+                        <input type="text" id="search-user" onkeyup="renderUserTable()" placeholder="ຄົ້ນຫາ ID, ຊື່ ຫຼື ພະແນກ..." class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm font-tnr focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex items-center text-xs text-gray-500">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button" onclick="selectAllVisible('user')" class="text-xs px-3 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100">ເລືອກທັງໝົດ</button>
+                            <button type="button" onclick="deleteSelected('user')" class="text-xs px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700">ລົບທີ່ເລືອກ</button>
+                            <button type="button" onclick="deleteAll('user')" class="text-xs px-3 py-2 rounded-lg bg-red-800 text-white hover:bg-red-900">ລົບທັງໝົດ</button>
+                            <span id="user-count">ທັງໝົດ: 0 ຄົນ</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- User Table (Times New Roman) -->
+                <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200 font-tnr">
+                        <thead class="bg-gray-50 text-gray-700 text-sm">
+                            <tr>
+                                <th class="px-3 py-3 text-center"><input type="checkbox" onchange="toggleVisibleSelection('user', this.checked)" title="ເລືອກທັງໝົດ"></th>
+                                <th class="px-4 py-3 text-left font-bold">userid (int4)</th>
+                                <th class="px-4 py-3 text-left font-bold">name (varchar)</th>
+                                <th class="px-4 py-3 text-left font-bold">section (varchar)</th>
+                                <th class="px-4 py-3 text-center font-bold">ຈັດການ (Actions)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-table-body" class="bg-white divide-y divide-gray-200 text-sm">
+                            <!-- Rows injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 3: CODE MANAGEMENT ==================== -->
+        <section id="section-code" class="hidden space-y-4">
+            <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-800">ຈັດການລະຫັດ (Code)</h2>
+                        <p class="text-xs text-gray-500">ຕາຕະລາງ <span class="font-tnr font-bold">code</span> (codeid int4, code varchar) - Font: Times New Roman</p>
+                    </div>
+                    
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="openCodeModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg text-sm font-medium shadow-sm flex items-center gap-1.5 transition">
+                            <i class="fa-solid fa-plus"></i> ເພີ່ມ Code
+                        </button>
+                        
+                        <label class="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-lg text-sm font-medium shadow-sm flex items-center gap-1.5 cursor-pointer transition">
+                            <i class="fa-solid fa-file-import"></i> Import Excel
+                            <input type="file" id="import-code-excel" accept=".xlsx, .xls" class="hidden" onchange="importCodeExcel(event)">
+                        </label>
+
+                        <button onclick="exportCodeExcel()" class="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-2 rounded-lg text-sm font-medium shadow-sm flex items-center gap-1.5 transition">
+                            <i class="fa-solid fa-file-export"></i> Export Excel (A4)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search Code -->
+                <div class="my-4 flex flex-col sm:flex-row justify-between gap-3">
+                    <div class="relative w-full sm:w-80">
+                        <i class="fa-solid fa-search absolute left-3 top-3 text-gray-400 text-sm"></i>
+                        <input type="text" id="search-code" onkeyup="renderCodeTable()" placeholder="ຄົ້ນຫາ CodeID ຫຼື Code..." class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm font-tnr focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex items-center text-xs text-gray-500">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button" onclick="selectAllVisible('code')" class="text-xs px-3 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100">ເລືອກທັງໝົດ</button>
+                            <button type="button" onclick="deleteSelected('code')" class="text-xs px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700">ລົບທີ່ເລືອກ</button>
+                            <button type="button" onclick="deleteAll('code')" class="text-xs px-3 py-2 rounded-lg bg-red-800 text-white hover:bg-red-900">ລົບທັງໝົດ</button>
+                            <span id="code-count">ທັງໝົດ: 0 ລະຫັດ</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Code Table (Times New Roman) -->
+                <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200 font-tnr">
+                        <thead class="bg-gray-50 text-gray-700 text-sm">
+                            <tr>
+                                <th class="px-3 py-3 text-center"><input type="checkbox" onchange="toggleVisibleSelection('code', this.checked)" title="ເລືອກທັງໝົດ"></th>
+                                <th class="px-4 py-3 text-left font-bold">codeid (int4)</th>
+                                <th class="px-4 py-3 text-left font-bold">code (varchar)</th>
+                                <th class="px-4 py-3 text-center font-bold">ຈັດການ (Actions)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="code-table-body" class="bg-white divide-y divide-gray-200 text-sm">
+                            <!-- Rows injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ==================== MODALS ==================== -->
+
+    <!-- 1. USER MODAL -->
+    <div id="modal-user" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-40 p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 id="modal-user-title" class="text-lg font-bold">ເພີ່ມຂໍ້ມູນ User</h3>
+                <button onclick="closeModal('modal-user')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <form id="form-user" onsubmit="saveUser(event)" class="space-y-4 font-tnr">
+                <input type="hidden" id="user-edit-mode" value="add">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">userid (int4 - Primary Key) *</label>
+                    <input type="number" id="input-userid" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="ເຊັ່ນ: 72 ຫຼື 130">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">name (varchar) *</label>
+                    <input type="text" id="input-username" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="ເຊັ່ນ: Phaysawanh CHANSAMOUTH">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">section (varchar)</label>
+                    <input type="text" id="input-usersection" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="ເຊັ່ນ: IT / HR / Operation">
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t font-sans">
+                    <button type="button" onclick="closeModal('modal-user')" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm">ຍົກເລີກ</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">ບັນທຶກ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. CODE MODAL -->
+    <div id="modal-code" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-40 p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 id="modal-code-title" class="text-lg font-bold">ເພີ່ມຂໍ້ມູນ Code</h3>
+                <button onclick="closeModal('modal-code')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <form id="form-code" onsubmit="saveCode(event)" class="space-y-4 font-tnr">
+                <input type="hidden" id="code-edit-mode" value="add">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">codeid (int4 - Primary Key) *</label>
+                    <input type="number" id="input-codeid" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="ເຊັ່ນ: 1">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">code (varchar) *</label>
+                    <input type="text" id="input-codeval" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="ເຊັ່ນ: W/L, D, AL, 06A, 12A, SUB">
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t font-sans">
+                    <button type="button" onclick="closeModal('modal-code')" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm">ຍົກເລີກ</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">ບັນທຶກ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 3. DATA MODAL (Includes Comment field ONLY here as requested) -->
+    <div id="modal-data" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-40 p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 id="modal-data-title" class="text-lg font-bold">ເພີ່ມຂໍ້ມູນ Data</h3>
+                <button onclick="closeModal('modal-data')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <form id="form-data" onsubmit="saveData(event)" class="space-y-4 font-tnr">
+                <input type="hidden" id="data-edit-mode" value="add">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">dataid (int4 - Primary Key) *</label>
+                    <input type="number" id="input-dataid" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="ເຊັ່ນ: 1001">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">userid & Name (Reference) *</label>
+                    <select id="input-data-userid" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+                        <option value="">-- ເລືອກພະນັກງານ --</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">code (varchar) *</label>
+                    <input type="text" id="input-data-code" list="code-datalist" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="ເລືອກ ຫຼື ພິມ Code (ເຊັ່ນ: W/L, D)">
+                    <datalist id="code-datalist"></datalist>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">date (format dd/MM/yyyy) *</label>
+                    <input type="text" id="input-data-date" required pattern="\d{1,2}/\d{2}/\d{4}" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="ເຊັ່ນ: 1/11/2026 ຫຼື 01/11/2026">
+                </div>
+                <!-- Comment field displayed ONLY when Adding or Editing as requested -->
+                <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                    <label class="block text-sm font-bold text-yellow-800 mb-1">
+                        <i class="fa-solid fa-comment-dots mr-1"></i> comment (ສະແດງສະເພາະຕອນເພີ່ມ/ແກ້ໄຂ)
+                    </label>
+                    <textarea id="input-data-comment" rows="2" class="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 bg-white" placeholder="ໝາຍເຫດເພີ່ມເຕີມ..."></textarea>
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t font-sans">
+                    <button type="button" onclick="closeModal('modal-data')" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm">ຍົກເລີກ</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">ບັນທຶກ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 4. DELETE CONFIRMATION MODAL -->
+    <div id="modal-confirm" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4 text-center">
+            <div class="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto text-2xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900">ຢືນຢັນການລຶບຂໍ້ມູນ?</h3>
+            <p id="confirm-message" class="text-sm text-gray-500">ທ່ານແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບລາຍການນີ້? ການກະທຳນີ້ບໍ່ສາມາດຍ້ອນກັບໄດ້.</p>
+            <div class="flex justify-center gap-3 pt-2">
+                <button onclick="closeModal('modal-confirm')" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium">ຍົກເລີກ</button>
+                <button id="btn-confirm-delete" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium">ລຶບຂໍ້ມູນ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. SQL CODE MODAL -->
+    <div id="modal-sql" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-lg font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-database text-indigo-600"></i> SQL Script ສຳລັບ Supabase (PostgreSQL)
+                </h3>
+                <button onclick="closeModal('modal-sql')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <p class="text-xs text-gray-600">ຄັດລອກ Code ດ້ານລຸ່ມນີ້ໄປວາງໃນ <b>SQL Editor</b> ຂອງ Supabase ແລ້ວກົດ <b>Run</b> ເພື່ອສ້າງຕາຕະລາງທັງ 3 ຕາຕະລາງ:</p>
+            <div class="relative flex-grow overflow-y-auto bg-slate-900 text-emerald-400 p-4 rounded-lg font-mono text-xs leading-relaxed">
+                <button onclick="copySqlCode()" class="absolute top-3 right-3 bg-slate-700 hover:bg-slate-600 text-white px-3 py-1 rounded text-xs flex items-center gap-1">
+                    <i class="fa-regular fa-copy"></i> Copy SQL
+                </button>
+                <pre id="sql-code-content">-- 1. ສ້າງຕາຕະລາງ user
+CREATE TABLE IF NOT EXISTS public."user" (
+    userid int4 PRIMARY KEY,
+    name varchar NOT NULL,
+    section varchar
+);
+
+-- 2. ສ້າງຕາຕະລາງ code
+CREATE TABLE IF NOT EXISTS public.code (
+    codeid int4 PRIMARY KEY,
+    code varchar NOT NULL
+);
+
+-- 3. ສ້າງຕາຕະລາງ data (ເຊື່ອມໂຍງ userid ກັບຕາຕະລາງ user)
+CREATE TABLE IF NOT EXISTS public.data (
+    dataid int4 PRIMARY KEY,
+    userid int4 REFERENCES public."user"(userid) ON DELETE CASCADE ON UPDATE CASCADE,
+    code varchar NOT NULL,
+    date varchar NOT NULL,
+    comment text
+);
+
+-- 4. ເປີດໃຊ້ງານ RLS ແລະ ອະນຸຍາດການເຂົ້າເຖິງ (ສຳລັບ Public API)
+ALTER TABLE public."user" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.code ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.data ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all access to user" ON public."user" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all access to code" ON public.code FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all access to data" ON public.data FOR ALL USING (true) WITH CHECK (true);
+
+-- 5. ເພີ່ມຂໍ້ມູນຕົວຢ່າງເບື້ອງຕົ້ນ (Optional)
+INSERT INTO public."user" (userid, name, section) VALUES 
+(72, 'Phaysawanh CHANSAMOUTH', 'Operation'),
+(130, 'Daovongvien THANVILAY', 'Operation'),
+(69, 'Silivanh PHOUTTHAVONG', 'Operation')
+ON CONFLICT (userid) DO NOTHING;
+
+INSERT INTO public.code (codeid, code) VALUES 
+(1, 'W/L'), (2, 'D'), (3, 'AL'), (4, '06A'), (5, '12A'), (6, 'SUB')
+ON CONFLICT (codeid) DO NOTHING;</pre>
+            </div>
+            <div class="flex justify-end pt-2">
+                <button onclick="closeModal('modal-sql')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">ປິດໜ້າຕ່າງ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== JAVASCRIPT LOGIC ==================== -->
+    <script>
+        // 1. SUPABASE CONFIGURATION
+        const SUPABASE_URL = 'https://uyxfzbxfehjaqikxdghd.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_i8bNz497PnEgGuOXZgu9kA_pY8Ei4DC';
+        
+        let supabaseClient = null;
+        let isConnected = false;
+        let realtimeChannel = null;
+        let silentRefreshTimer = null;
+        let silentRefreshRunning = false;
+        let silentRefreshQueued = false;
+        let silentPollTimer = null;
+
+        // Local State Stores
+        let usersList = [];
+        let codesList = [];
+        let dataList = [];
+        let currentDataView = 'excel'; // Default: show Excel-style checking matrix
+        let currentDataPage = 1;
+        const DATA_PAGE_SIZE = 100;
+        let pendingDataImport = null;
+
+        // ກຳນົດຊ່ວງວັນທີອັດຕະໂນມັດຕາມວັນທີປະຈຸບັນ
+        function setDefaultDateRange() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = today.getMonth();
+            const day = today.getDate();
+
+            const startDay = day <= 15 ? 1 : 16;
+            const endDay = day <= 15 ? 15 : new Date(year, month + 1, 0).getDate();
+
+            const startDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(startDay).padStart(2, '0')}`;
+            const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
+
+            document.getElementById('filter-data-start').value = startDate;
+            document.getElementById('filter-data-end').value = endDate;
+        }
+
+        // Initialize App on Load
+        window.onload = async function() {
+            setDefaultDateRange();
+            await initSupabase();
+        };
+
+        // Initialize & Check Supabase Connection
+        async function initSupabase() {
+            const statusDot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+
+            try {
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                
+                // Test query to verify connection & tables
+                const { data, error } = await supabaseClient.from('user').select('userid').limit(1);
+                
+                if (error) {
+                    throw error;
+                }
+
+                isConnected = true;
+                statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+                statusText.textContent = 'ເຊື່ອມຕໍ່ Supabase ສຳເລັດ';
+                statusText.className = 'text-emerald-300';
+                
+                await fetchAllData();
+                setupSilentDatabaseSync();
+            } catch (err) {
+                console.error('Supabase Connection Error:', err);
+                isConnected = false;
+                statusDot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+                statusText.textContent = 'ເຊື່ອມຕໍ່ຜິດພາດ (ກະລຸນາ Run SQL)';
+                statusText.className = 'text-red-300';
+                showToast('ບໍ່ພົບຕາຕະລາງໃນ Supabase! ກະລຸນາກົດປຸ່ມ "SQL Code" ເພື່ອສ້າງຕາຕະລາງກ່ອນ.', 'error');
+            }
+        }
+
+        // Fetch All Tables
+        async function fetchAllRows(tableName, orderColumn) {
+            const pageSize = 1000;
+            let allRows = [];
+            for (let from = 0; ; from += pageSize) {
+                const { data, error } = await supabaseClient
+                    .from(tableName).select('*')
+                    .order(orderColumn, { ascending: true })
+                    .range(from, from + pageSize - 1);
+                if (error) throw error;
+                const page = data || [];
+                allRows = allRows.concat(page);
+                if (page.length < pageSize) break;
+            }
+            return allRows;
+        }
+
+        async function fetchAllData() {
+            if (!supabaseClient) return;
+            try {
+                const [allUsers, allCodes, allData] = await Promise.all([
+                    fetchAllRows('user', 'userid'),
+                    fetchAllRows('code', 'codeid'),
+                    fetchAllRows('data', 'dataid')
+                ]);
+                usersList = allUsers;
+                codesList = allCodes;
+                dataList = allData;
+
+                renderUserTable();
+                renderCodeTable();
+                refreshDataViews();
+                populateDropdowns();
+            } catch (err) {
+                showToast('ເກີດຂໍ້ຜິດພາດໃນການດຶງຂໍ້ມູນ: ' + err.message, 'error');
+            }
+        }
+
+        // Silent database synchronization: Realtime first, quiet polling as a fallback.
+        // No toast, loading overlay, page reload, or visible status change is shown to users.
+        function setupSilentDatabaseSync() {
+            if (!supabaseClient) return;
+
+            // Subscribe to changes from all application tables.
+            if (realtimeChannel) {
+                supabaseClient.removeChannel(realtimeChannel);
+                realtimeChannel = null;
+            }
+
+            realtimeChannel = supabaseClient.channel('app-database-silent-sync')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'user' }, queueSilentRefresh)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'code' }, queueSilentRefresh)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'data' }, queueSilentRefresh)
+                .subscribe((status) => {
+                    // Realtime may be unavailable if tables are not in Supabase Realtime publication.
+                    // Quiet polling below remains as a fallback; do not expose connection chatter.
+                    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+                        console.warn('Silent Realtime sync status:', status);
+                    }
+                });
+
+            // Fallback check every 30 seconds; pauses while the tab is hidden.
+            if (silentPollTimer) clearInterval(silentPollTimer);
+            silentPollTimer = setInterval(() => {
+                if (!document.hidden && isConnected) queueSilentRefresh();
+            }, 30000);
+        }
+
+        function queueSilentRefresh() {
+            if (silentRefreshTimer) clearTimeout(silentRefreshTimer);
+            // Debounce bursts of row changes (for example, bulk imports).
+            silentRefreshTimer = setTimeout(refreshFromDatabaseSilently, 500);
+        }
+
+        async function refreshFromDatabaseSilently() {
+            if (!supabaseClient || !isConnected || document.hidden) return;
+            if (silentRefreshRunning) {
+                silentRefreshQueued = true;
+                return;
+            }
+
+            silentRefreshRunning = true;
+            try {
+                const [allUsers, allCodes, allData] = await Promise.all([
+                    fetchAllRows('user', 'userid'),
+                    fetchAllRows('code', 'codeid'),
+                    fetchAllRows('data', 'dataid')
+                ]);
+
+                // Replace local snapshots only after all three reads succeed.
+                usersList = allUsers;
+                codesList = allCodes;
+                dataList = allData;
+
+                // Refresh visible data without disturbing current search/date filters or page size.
+                renderUserTable();
+                renderCodeTable();
+                refreshDataViews();
+                populateDropdowns();
+            } catch (err) {
+                // Silent by design: retain the last successfully loaded data and retry later.
+                console.warn('Silent database refresh failed:', err);
+            } finally {
+                silentRefreshRunning = false;
+                if (silentRefreshQueued) {
+                    silentRefreshQueued = false;
+                    queueSilentRefresh();
+                }
+            }
+        }
+
+        window.addEventListener('beforeunload', () => {
+            if (silentRefreshTimer) clearTimeout(silentRefreshTimer);
+            if (silentPollTimer) clearInterval(silentPollTimer);
+            if (realtimeChannel && supabaseClient) supabaseClient.removeChannel(realtimeChannel);
+        });
+
+        // สลับมุมมองหน้า Data ระหว่าง 'list' และ 'excel'
+        function switchDataView(view) {
+            currentDataView = view;
+            const listContainer = document.getElementById('data-list-container');
+            const excelContainer = document.getElementById('data-excel-container');
+            const btnList = document.getElementById('btn-view-list');
+            const btnExcel = document.getElementById('btn-view-excel');
+
+            if (view === 'excel') {
+                listContainer.classList.add('hidden');
+                excelContainer.classList.remove('hidden');
+                btnExcel.className = 'px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium bg-white text-emerald-700 shadow-sm transition flex items-center gap-1.5';
+                btnList.className = 'px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium text-gray-600 hover:text-gray-900 transition flex items-center gap-1.5';
+                renderExcelPreviewTable();
+            } else {
+                excelContainer.classList.add('hidden');
+                listContainer.classList.remove('hidden');
+                btnList.className = 'px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium bg-white text-blue-600 shadow-sm transition flex items-center gap-1.5';
+                btnExcel.className = 'px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium text-gray-600 hover:text-gray-900 transition flex items-center gap-1.5';
+                renderDataTable();
+            }
+        }
+
+        function refreshDataViews() {
+            currentDataPage = 1;
+            renderDataTable();
+            if (currentDataView === 'excel') {
+                renderExcelPreviewTable();
+            }
+        }
+
+        // Tab Navigation Logic
+        function switchTab(tabName) {
+            ['data', 'user', 'code'].forEach(t => {
+                document.getElementById(`section-${t}`).classList.add('hidden');
+                const btn = document.getElementById(`tab-${t}`);
+                btn.classList.remove('border-blue-500', 'text-blue-400');
+                btn.classList.add('border-transparent', 'text-slate-300');
+            });
+
+            document.getElementById(`section-${tabName}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tab-${tabName}`);
+            activeBtn.classList.add('border-blue-500', 'text-blue-400');
+            activeBtn.classList.remove('border-transparent', 'text-slate-300');
+        }
+
+        // Toast Notification
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-emerald-600' : (type === 'error' ? 'bg-red-600' : 'bg-blue-600');
+            const icon = type === 'success' ? 'fa-circle-check' : (type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-info');
+            
+            toast.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2.5 text-sm transition-all duration-300 transform translate-y-0`;
+            toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${message}</span>`;
+            
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // Modal Helpers
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+            document.getElementById(id).classList.remove('flex');
+        }
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+            document.getElementById(id).classList.add('flex');
+        }
+        function openSqlModal() { openModal('modal-sql'); }
+        function copySqlCode() {
+            const text = document.getElementById('sql-code-content').innerText;
+            const temp = document.createElement('textarea');
+            temp.value = text;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+            showToast('ຄັດລອກ SQL Code ສຳເລັດແລ້ວ!');
+        }
+
+        // Format User ID as 3 digits for display (e.g. 72 -> 072)
+        function formatUserId(id) {
+            return String(id).padStart(3, '0');
+        }
+
+        // Helper: ຈັດລຽງລຳດັບ User ໃຫ້ section 'FE' ຂຶ້ນກ່ອນ ແລ້ວຈຶ່ງລຽງຕາມ userid
+        function getSortedUsers(list = usersList) {
+            return [...list].sort((a, b) => {
+                const isFeA = (a.section || '').trim().toUpperCase() === 'FE' ? 0 : 1;
+                const isFeB = (b.section || '').trim().toUpperCase() === 'FE' ? 0 : 1;
+                if (isFeA !== isFeB) return isFeA - isFeB;
+                return a.userid - b.userid;
+            });
+        }
+
+        // Populate User & Code Dropdowns in Data Modal
+        function populateDropdowns() {
+            const userSelect = document.getElementById('input-data-userid');
+            userSelect.innerHTML = '<option value="">-- ເລືອກພະນັກງານ (userid - name) --</option>';
+            getSortedUsers().forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u.userid;
+                opt.textContent = `${formatUserId(u.userid)} - ${u.name}${u.section ? ' (' + u.section + ')' : ''}`;
+                userSelect.appendChild(opt);
+            });
+
+            const codeDatalist = document.getElementById('code-datalist');
+            codeDatalist.innerHTML = '';
+            codesList.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.code;
+                codeDatalist.appendChild(opt);
+            });
+        }
+
+        // ==================== CRUD: USER ====================
+        function renderUserTable() {
+            const tbody = document.getElementById('user-table-body');
+            const query = document.getElementById('search-user').value.toLowerCase();
+            tbody.innerHTML = '';
+
+            const filtered = usersList.filter(u => 
+                formatUserId(u.userid).includes(query) ||
+                String(u.userid).includes(query) ||
+                (u.name && u.name.toLowerCase().includes(query)) ||
+                (u.section && u.section.toLowerCase().includes(query))
+            );
+
+            document.getElementById('user-count').textContent = `ທັງໝົດ: ${filtered.length} ຄົນ`;
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400 font-sans">ບໍ່ພົບຂໍ້ມູນ User</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(u => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50 transition';
+                tr.innerHTML = `
+                    <td class="px-3 py-3 text-center"><input type="checkbox" class="bulk-select-user" value="${u.userid}" aria-label="Select user ${u.userid}"></td>
+                    <td class="px-4 py-3 font-bold text-gray-900">${formatUserId(u.userid)}</td>
+                    <td class="px-4 py-3 text-gray-800">${u.name}</td>
+                    <td class="px-4 py-3 text-gray-600">${u.section || '-'}</td>
+                    <td class="px-4 py-3 text-center space-x-2 font-sans">
+                        <button onclick="openUserModal(${u.userid})" class="text-blue-600 hover:text-blue-800 p-1" title="ແກ້ໄຂ"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <button onclick="confirmDelete('user', ${u.userid})" class="text-red-600 hover:text-red-800 p-1" title="ລຶບ"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openUserModal(userid = null) {
+            const modeInput = document.getElementById('user-edit-mode');
+            const idInput = document.getElementById('input-userid');
+            const nameInput = document.getElementById('input-username');
+            const secInput = document.getElementById('input-usersection');
+            const title = document.getElementById('modal-user-title');
+
+            if (userid !== null) {
+                const user = usersList.find(u => u.userid === userid);
+                modeInput.value = 'edit';
+                title.textContent = 'ແກ້ໄຂຂໍ້ມູນ User';
+                idInput.value = user.userid;
+                idInput.readOnly = true;
+                idInput.classList.add('bg-gray-100');
+                nameInput.value = user.name;
+                secInput.value = user.section || '';
+            } else {
+                modeInput.value = 'add';
+                title.textContent = 'ເພີ່ມຂໍ້ມູນ User';
+                const maxId = usersList.length > 0 ? Math.max(...usersList.map(u => u.userid)) : 0;
+                idInput.value = maxId + 1;
+                idInput.readOnly = false;
+                idInput.classList.remove('bg-gray-100');
+                nameInput.value = '';
+                secInput.value = '';
+            }
+            openModal('modal-user');
+        }
+
+        async function saveUser(e) {
+            e.preventDefault();
+            const mode = document.getElementById('user-edit-mode').value;
+            const userid = parseInt(document.getElementById('input-userid').value);
+            const name = document.getElementById('input-username').value.trim();
+            const section = document.getElementById('input-usersection').value.trim();
+
+            try {
+                if (mode === 'add') {
+                    const { error } = await supabaseClient.from('user').insert([{ userid, name, section }]);
+                    if (error) throw error;
+                    showToast('ເພີ່ມ User ສຳເລັດ!');
+                } else {
+                    const { error } = await supabaseClient.from('user').update({ name, section }).eq('userid', userid);
+                    if (error) throw error;
+                    showToast('ແກ້ໄຂ User ສຳເລັດ!');
+                }
+                closeModal('modal-user');
+                await fetchAllData();
+            } catch (err) {
+                showToast('ຜິດພາດ: ' + err.message, 'error');
+            }
+        }
+
+        // ==================== CRUD: CODE ====================
+        function renderCodeTable() {
+            const tbody = document.getElementById('code-table-body');
+            const query = document.getElementById('search-code').value.toLowerCase();
+            tbody.innerHTML = '';
+
+            const filtered = codesList.filter(c => 
+                String(c.codeid).includes(query) ||
+                (c.code && c.code.toLowerCase().includes(query))
+            );
+
+            document.getElementById('code-count').textContent = `ທັງໝົດ: ${filtered.length} ລະຫັດ`;
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 font-sans">ບໍ່ພົບຂໍ້ມູນ Code</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50 transition';
+                tr.innerHTML = `
+                    <td class="px-3 py-3 text-center"><input type="checkbox" class="bulk-select-code" value="${c.codeid}" aria-label="Select code ${c.codeid}"></td>
+                    <td class="px-4 py-3 text-gray-900">${c.codeid}</td>
+                    <td class="px-4 py-3 font-bold text-gray-800">${c.code}</td>
+                    <td class="px-4 py-3 text-center space-x-2 font-sans">
+                        <button onclick="openCodeModal(${c.codeid})" class="text-blue-600 hover:text-blue-800 p-1" title="ແກ້ໄຂ"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <button onclick="confirmDelete('code', ${c.codeid})" class="text-red-600 hover:text-red-800 p-1" title="ລຶບ"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openCodeModal(codeid = null) {
+            const modeInput = document.getElementById('code-edit-mode');
+            const idInput = document.getElementById('input-codeid');
+            const valInput = document.getElementById('input-codeval');
+            const title = document.getElementById('modal-code-title');
+
+            if (codeid !== null) {
+                const item = codesList.find(c => c.codeid === codeid);
+                modeInput.value = 'edit';
+                title.textContent = 'ແກ້ໄຂຂໍ້ມູນ Code';
+                idInput.value = item.codeid;
+                idInput.readOnly = true;
+                idInput.classList.add('bg-gray-100');
+                valInput.value = item.code;
+            } else {
+                modeInput.value = 'add';
+                title.textContent = 'ເພີ່ມຂໍ້ມູນ Code';
+                const maxId = codesList.length > 0 ? Math.max(...codesList.map(c => c.codeid)) : 0;
+                idInput.value = maxId + 1;
+                idInput.readOnly = false;
+                idInput.classList.remove('bg-gray-100');
+                valInput.value = '';
+            }
+            openModal('modal-code');
+        }
+
+        async function saveCode(e) {
+            e.preventDefault();
+            const mode = document.getElementById('code-edit-mode').value;
+            const codeid = parseInt(document.getElementById('input-codeid').value);
+            const code = document.getElementById('input-codeval').value.trim();
+
+            try {
+                if (mode === 'add') {
+                    const { error } = await supabaseClient.from('code').insert([{ codeid, code }]);
+                    if (error) throw error;
+                    showToast('ເພີ່ມ Code ສຳເລັດ!');
+                } else {
+                    const { error } = await supabaseClient.from('code').update({ code }).eq('codeid', codeid);
+                    if (error) throw error;
+                    showToast('ແກ້ໄຂ Code ສຳເລັດ!');
+                }
+                closeModal('modal-code');
+                await fetchAllData();
+            } catch (err) {
+                showToast('ຜິດພາດ: ' + err.message, 'error');
+            }
+        }
+
+        // ==================== CRUD: DATA ====================
+        // Helper: แปลงข้อความวันที่ dd/MM/yyyy เป็น Date Object (ตั้งเวลาเป็น 00:00:00)
+        function parseDMY(dateStr) {
+            if (!dateStr) return null;
+            const parts = String(dateStr).trim().split('/');
+            if (parts.length !== 3) return null;
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            const year = parseInt(parts[2], 10);
+            const d = new Date(year, month, day);
+            d.setHours(0, 0, 0, 0);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        // Helper: แปลงค่าจาก <input type="date"> (yyyy-MM-dd) เป็น Date Object
+        function parseYMD(ymdStr) {
+            if (!ymdStr) return null;
+            const parts = String(ymdStr).trim().split('-');
+            if (parts.length !== 3) return null;
+            const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+            d.setHours(0, 0, 0, 0);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        // ฟังก์ชันล้างตัวกรองหน้า Data
+        function clearDataFilters() {
+            document.getElementById('search-data').value = '';
+            document.getElementById('filter-data-start').value = '';
+            document.getElementById('filter-data-end').value = '';
+            refreshDataViews();
+        }
+
+        // ฟังก์ชันดึงรายการ Data ที่ผ่านการกรองแล้ว
+        function getFilteredData() {
+            const query = document.getElementById('search-data').value.toLowerCase();
+            const startStr = document.getElementById('filter-data-start').value;
+            const endStr = document.getElementById('filter-data-end').value;
+
+            const startDate = parseYMD(startStr);
+            const endDate = parseYMD(endStr);
+
+            const userMap = {};
+            const sectionMap = {};
+            usersList.forEach(u => {
+                userMap[u.userid] = u.name;
+                sectionMap[u.userid] = (u.section || '').trim().toUpperCase();
+            });
+
+            return dataList.filter(d => {
+                const uName = (userMap[d.userid] || '').toLowerCase();
+                const uSec = (sectionMap[d.userid] || '').toLowerCase();
+                const matchQuery = String(d.dataid).includes(query) ||
+                                   formatUserId(d.userid).includes(query) ||
+                                   String(d.userid).includes(query) ||
+                                   uName.includes(query) ||
+                                   uSec.includes(query) ||
+                                   (d.code && d.code.toLowerCase().includes(query)) ||
+                                   (d.date && d.date.toLowerCase().includes(query));
+
+                let matchDateRange = true;
+                if (startDate || endDate) {
+                    const rowDate = parseDMY(d.date);
+                    if (!rowDate) {
+                        matchDateRange = false;
+                    } else {
+                        if (startDate && rowDate < startDate) matchDateRange = false;
+                        if (endDate && rowDate > endDate) matchDateRange = false;
+                    }
+                }
+
+                return matchQuery && matchDateRange;
+            }).sort((a, b) => {
+                const isFeA = sectionMap[a.userid] === 'FE' ? 0 : 1;
+                const isFeB = sectionMap[b.userid] === 'FE' ? 0 : 1;
+                if (isFeA !== isFeB) return isFeA - isFeB;
+                if (a.userid !== b.userid) return a.userid - b.userid;
+                return a.dataid - b.dataid;
+            });
+        }
+
+        function changeDataPage(page) {
+            const filtered = getFilteredData();
+            const totalPages = Math.max(1, Math.ceil(filtered.length / DATA_PAGE_SIZE));
+            currentDataPage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+            renderDataTable();
+        }
+
+        function renderDataPagination(totalItems, totalPages, startIndex, endIndex) {
+            const wrapper = document.getElementById('data-pagination');
+            const info = document.getElementById('data-pagination-info');
+            const controls = document.getElementById('data-pagination-controls');
+            if (!wrapper || !info || !controls) return;
+
+            if (totalItems <= DATA_PAGE_SIZE) {
+                wrapper.classList.add('hidden');
+                controls.innerHTML = '';
+                return;
+            }
+
+            wrapper.classList.remove('hidden');
+            info.textContent = `ສະແດງ ${startIndex + 1}-${endIndex} ຈາກ ${totalItems.toLocaleString()} ລາຍການ · ໜ້າ ${currentDataPage} / ${totalPages}`;
+
+            const buttonClass = 'min-w-[34px] px-2.5 py-1.5 rounded-md border text-xs font-semibold transition';
+            const makeButton = (label, page, disabled = false, active = false, title = '') => {
+                const cls = active
+                    ? ' bg-blue-600 border-blue-600 text-white'
+                    : ' bg-white border-gray-300 text-gray-700 hover:bg-blue-50';
+                return `<button type="button" ${disabled ? 'disabled' : `onclick="changeDataPage(${page})"`} title="${title}" class="${buttonClass}${cls}${disabled ? ' opacity-40 cursor-not-allowed' : ''}">${label}</button>`;
+            };
+
+            let html = makeButton('<i class="fa-solid fa-angles-left"></i>', 1, currentDataPage === 1, false, 'ໜ້າທຳອິດ');
+            html += makeButton('<i class="fa-solid fa-chevron-left"></i>', currentDataPage - 1, currentDataPage === 1, false, 'ໜ້າກ່ອນ');
+
+            let first = Math.max(1, currentDataPage - 2);
+            let last = Math.min(totalPages, first + 4);
+            first = Math.max(1, last - 4);
+            if (first > 1) html += '<span class="px-1 text-gray-400">…</span>';
+            for (let page = first; page <= last; page++) {
+                html += makeButton(page, page, false, page === currentDataPage);
+            }
+            if (last < totalPages) html += '<span class="px-1 text-gray-400">…</span>';
+            html += makeButton('<i class="fa-solid fa-chevron-right"></i>', currentDataPage + 1, currentDataPage === totalPages, false, 'ໜ້າຕໍ່ໄປ');
+            html += makeButton('<i class="fa-solid fa-angles-right"></i>', totalPages, currentDataPage === totalPages, false, 'ໜ້າສຸດທ້າຍ');
+            controls.innerHTML = html;
+        }
+
+        function renderDataTable() {
+            const tbody = document.getElementById('data-table-body');
+            tbody.innerHTML = '';
+
+            // Map user name via reference userid
+            const userMap = {};
+            usersList.forEach(u => userMap[u.userid] = u.name);
+
+            const filtered = getFilteredData();
+            const totalPages = Math.max(1, Math.ceil(filtered.length / DATA_PAGE_SIZE));
+            if (currentDataPage > totalPages) currentDataPage = totalPages;
+            if (currentDataPage < 1) currentDataPage = 1;
+            const startIndex = (currentDataPage - 1) * DATA_PAGE_SIZE;
+            const pageRows = filtered.slice(startIndex, startIndex + DATA_PAGE_SIZE);
+            const endIndex = Math.min(startIndex + pageRows.length, filtered.length);
+
+            document.getElementById('data-count').textContent = `ທັງໝົດ: ${filtered.length.toLocaleString()} ລາຍການ`;
+            renderDataPagination(filtered.length, totalPages, startIndex, endIndex);
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400 font-sans">ບໍ່ພົບຂໍ້ມູນ Data</td></tr>`;
+                return;
+            }
+
+            // Bold codes matching image style (W/L, AL, SUB, DAH)
+            const boldCodes = ['W/L', 'AL', 'SUB', 'DAH'];
+
+            pageRows.forEach(d => {
+                const uName = userMap[d.userid] || '<span class="text-red-500 italic">Unknown User</span>';
+                const isBold = boldCodes.includes((d.code || '').toUpperCase());
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50 transition';
+                tr.innerHTML = `
+                    <td class="px-3 py-3 text-center"><input type="checkbox" class="bulk-select-data" value="${d.dataid}" aria-label="Select data ${d.dataid}"></td>
+                    <td class="px-4 py-3 text-gray-600">${d.dataid}</td>
+                    <td class="px-4 py-3 text-gray-900">${formatUserId(d.userid)}</td>
+                    <td class="px-4 py-3 text-gray-800">${uName}</td>
+                    <td class="px-4 py-3 text-center ${isBold ? 'font-bold text-black' : 'text-gray-800'}">${d.code}</td>
+                    <td class="px-4 py-3 text-center text-gray-800">${d.date}</td>
+                    <td class="px-4 py-3 text-center space-x-2 font-sans">
+                        <button onclick="openDataModal(${d.dataid})" class="text-blue-600 hover:text-blue-800 p-1" title="ແກ້ໄຂ / ເບິ່ງ Comment"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <button onclick="confirmDelete('data', ${d.dataid})" class="text-red-600 hover:text-red-800 p-1" title="ລຶບ"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ฟังก์ชันสร้างตารางตรวจสอบรูปแบบเดียวกับ Excel (Matrix View)
+        function renderExcelPreviewTable() {
+            const table = document.getElementById('excel-preview-table');
+            if (!table) return;
+
+            const filteredData = getFilteredData();
+            const query = document.getElementById('search-data').value.toLowerCase();
+            const startStr = document.getElementById('filter-data-start').value;
+            const endStr = document.getElementById('filter-data-end').value;
+
+            let uniqueDates = [];
+
+            // หากเลือกวันที่เริ่มต้นและสิ้นสุด ให้เรียงวันที่ครบทุกวันในช่วงนั้น
+            if (startStr && endStr) {
+                const startD = parseYMD(startStr);
+                const endD = parseYMD(endStr);
+                if (startD && endD && startD <= endD) {
+                    let curr = new Date(startD);
+                    while (curr <= endD) {
+                        const d = curr.getDate();
+                        const m = String(curr.getMonth() + 1).padStart(2, '0');
+                        const y = curr.getFullYear();
+                        uniqueDates.push(`${d}/${m}/${y}`);
+                        curr.setDate(curr.getDate() + 1);
+                    }
+                }
+            }
+
+            if (uniqueDates.length === 0) {
+                uniqueDates = [...new Set(filteredData.map(d => d.date))];
+                uniqueDates.sort((a, b) => {
+                    const [d1, m1, y1] = a.split('/').map(Number);
+                    const [d2, m2, y2] = b.split('/').map(Number);
+                    return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
+                });
+            }
+
+            if (uniqueDates.length === 0) {
+                for (let i = 1; i <= 15; i++) {
+                    uniqueDates.push(`${i}/11/2026`);
+                }
+            }
+            // กรองรายชื่อ User ตามคำค้นหา (ถ้าพิมพ์ค้นหาชื่อหรือ ID) และจัดเรียงให้ section 'FE' ขึ้นก่อน
+            let displayUsers = getSortedUsers();
+            if (query) {
+                const matchingUserIds = new Set(filteredData.map(d => d.userid));
+                displayUsers = displayUsers.filter(u => 
+                    formatUserId(u.userid).includes(query) ||
+                    String(u.userid).includes(query) ||
+                    (u.name && u.name.toLowerCase().includes(query)) ||
+                    (u.section && u.section.toLowerCase().includes(query)) ||
+                    matchingUserIds.has(u.userid)
+                );
+            }
+
+            // สร้าง Map เก็บข้อมูลทั้ง Object ของแต่ละวัน เพื่อคลิกแก้ไขได้
+            const dataObjMap = {};
+            filteredData.forEach(d => {
+                if (!dataObjMap[d.userid]) dataObjMap[d.userid] = {};
+                dataObjMap[d.userid][d.date] = d;
+            });
+
+            const boldCodes = ['W/L', 'AL', 'SUB', 'DAH'];
+
+            // สร้างส่วนหัว Row 1 (no1, no2, 1, 2, 3...) และ Row 2 (ID, Name, Vertical Dates)
+            let html = `<thead class="sticky top-0 z-20 bg-white">`;
+            
+            // Row 1
+            html += `<tr>`;
+            html += `<th class="border border-black px-2 py-1 text-center font-normal text-sm bg-gray-50 sticky left-0 z-30 min-w-[55px]">no1</th>`;
+            html += `<th class="border border-black px-3 py-1 text-center font-normal text-sm bg-gray-50 sticky left-[55px] z-30 min-w-[220px]">no2</th>`;
+            uniqueDates.forEach((_, idx) => {
+                html += `<th class="border border-black px-1 py-1 text-center font-normal text-sm bg-gray-50 min-w-[44px]">${idx + 1}</th>`;
+            });
+            html += `</tr>`;
+
+            // Row 2 (Vertical Text for Dates)
+            html += `<tr>`;
+            html += `<th class="border border-black px-2 py-2 text-center font-normal text-base bg-white sticky left-0 z-30">ID</th>`;
+            html += `<th class="border border-black px-3 py-2 text-center font-normal text-base bg-white sticky left-[55px] z-30">Name</th>`;
+            uniqueDates.forEach(dt => {
+                html += `<th class="border border-black p-1 text-center font-normal text-sm bg-white h-28 align-middle">
+                            <div style="writing-mode: vertical-rl; transform: rotate(180deg);" class="mx-auto whitespace-nowrap leading-none">${dt}</div>
+                         </th>`;
+            });
+            html += `</tr></thead><tbody>`;
+
+            // สร้างแถวข้อมูลพนักงาน Row 3+
+            if (displayUsers.length === 0) {
+                html += `<tr><td colspan="${uniqueDates.length + 2}" class="border border-black px-4 py-8 text-center text-gray-400 font-sans">ບໍ່ພົບຂໍ້ມູນພະນັກງານ</td></tr>`;
+            } else {
+                displayUsers.forEach(u => {
+                    html += `<tr class="hover:bg-blue-50/40 transition">`;
+                    html += `<td class="border border-black px-2 py-1.5 text-center text-sm bg-white sticky left-0 z-10">${formatUserId(u.userid)}</td>`;
+                    html += `<td class="border border-black px-3 py-1.5 text-left text-sm bg-white sticky left-[55px] z-10 whitespace-nowrap">${u.name}</td>`;
+                    
+                    uniqueDates.forEach(dt => {
+                        const cellObj = dataObjMap[u.userid] ? dataObjMap[u.userid][dt] : null;
+                        const codeVal = cellObj ? cellObj.code : '';
+                        const isBold = boldCodes.includes(codeVal.toUpperCase());
+                        const hasComment = cellObj && cellObj.comment;
+                        
+                        // คลิกที่ช่องเพื่อแก้ไข (ถ้ามีข้อมูลแล้ว) หรือเพิ่มใหม่ (ถ้าช่องว่าง)
+                        const clickAction = cellObj 
+                            ? `openDataModal(${cellObj.dataid})` 
+                            : `openDataModalWithPreset(${u.userid}, '${dt}')`;
+
+                        html += `<td onclick="${clickAction}" title="ກົດເພື່ອ${cellObj ? 'ແກ້ໄຂ' : 'ເພີ່ມ'}ຂໍ້ມູນ (${formatUserId(u.userid)} - ${dt})${hasComment ? ' | ໝາຍເຫດ: ' + cellObj.comment : ''}" 
+                                     class="border border-black px-1 py-1.5 text-center text-xs cursor-pointer hover:bg-blue-100 relative ${isBold ? 'font-bold' : 'font-normal'}">
+                                    ${codeVal}
+                                    ${hasComment ? '<span class="absolute top-0 right-0 w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent"></span>' : ''}
+                                 </td>`;
+                    });
+                    html += `</tr>`;
+                });
+            }
+
+            html += `</tbody>`;
+            table.innerHTML = html;
+        }
+
+        // เปิด Modal เพิ่มข้อมูล Data พร้อมกำหนด User และ วันที่ อัตโนมัติ (เมื่อกดจากตาราง Excel View)
+        function openDataModalWithPreset(userid, dateStr) {
+            openDataModal(null);
+            document.getElementById('input-data-userid').value = userid;
+            document.getElementById('input-data-date').value = dateStr;
+        }
+
+        function openDataModal(dataid = null) {
+            const modeInput = document.getElementById('data-edit-mode');
+            const idInput = document.getElementById('input-dataid');
+            const userInput = document.getElementById('input-data-userid');
+            const codeInput = document.getElementById('input-data-code');
+            const dateInput = document.getElementById('input-data-date');
+            const commentInput = document.getElementById('input-data-comment');
+            const title = document.getElementById('modal-data-title');
+
+            if (dataid !== null) {
+                const item = dataList.find(d => d.dataid === dataid);
+                modeInput.value = 'edit';
+                title.textContent = 'ແກ້ໄຂຂໍ້ມູນ Data';
+                idInput.value = item.dataid;
+                idInput.readOnly = true;
+                idInput.classList.add('bg-gray-100');
+                userInput.value = item.userid;
+                codeInput.value = item.code;
+                dateInput.value = item.date;
+                commentInput.value = item.comment || ''; // Load comment ONLY here
+            } else {
+                modeInput.value = 'add';
+                title.textContent = 'ເພີ່ມຂໍ້ມູນ Data';
+                const maxId = dataList.length > 0 ? Math.max(...dataList.map(d => d.dataid)) : 0;
+                idInput.value = maxId + 1;
+                idInput.readOnly = false;
+                idInput.classList.remove('bg-gray-100');
+                userInput.value = '';
+                codeInput.value = '';
+                
+                // Default today in dd/MM/yyyy
+                const today = new Date();
+                const d = today.getDate();
+                const m = String(today.getMonth() + 1).padStart(2, '0');
+                const y = today.getFullYear();
+                dateInput.value = `${d}/${m}/${y}`;
+                commentInput.value = '';
+            }
+            openModal('modal-data');
+        }
+
+        async function saveData(e) {
+            e.preventDefault();
+            const mode = document.getElementById('data-edit-mode').value;
+            const dataid = parseInt(document.getElementById('input-dataid').value);
+            const userid = parseInt(document.getElementById('input-data-userid').value);
+            const code = document.getElementById('input-data-code').value.trim();
+            const date = document.getElementById('input-data-date').value.trim();
+            const comment = document.getElementById('input-data-comment').value.trim();
+
+            try {
+                if (mode === 'add') {
+                    const { error } = await supabaseClient.from('data').insert([{ dataid, userid, code, date, comment }]);
+                    if (error) throw error;
+                    showToast('ເພີ່ມຂໍ້ມູນ Data ສຳເລັດ!');
+                } else {
+                    const { error } = await supabaseClient.from('data').update({ userid, code, date, comment }).eq('dataid', dataid);
+                    if (error) throw error;
+                    showToast('ແກ້ໄຂຂໍ້ມູນ Data ສຳເລັດ!');
+                }
+                closeModal('modal-data');
+                await fetchAllData();
+            } catch (err) {
+                showToast('ຜິດພາດ: ' + err.message, 'error');
+            }
+        }
+
+        // ==================== BULK DELETE: DATA / USER / CODE ====================
+        function getBulkConfig(table) {
+            if (table === 'data') return { pk: 'dataid', list: dataList, selector: '.bulk-select-data', label: 'Data' };
+            if (table === 'user') return { pk: 'userid', list: usersList, selector: '.bulk-select-user', label: 'User' };
+            return { pk: 'codeid', list: codesList, selector: '.bulk-select-code', label: 'Code' };
+        }
+
+        function getVisibleIds(table) {
+            if (table === 'data') return getFilteredData().map(x => String(x.dataid));
+            if (table === 'user') {
+                const q = (document.getElementById('search-user')?.value || '').toLowerCase();
+                return usersList.filter(u => formatUserId(u.userid).includes(q) || String(u.userid).includes(q) || (u.name || '').toLowerCase().includes(q) || (u.section || '').toLowerCase().includes(q)).map(x => String(x.userid));
+            }
+            const q = (document.getElementById('search-code')?.value || '').toLowerCase();
+            return codesList.filter(c => String(c.codeid).includes(q) || (c.code || '').toLowerCase().includes(q)).map(x => String(x.codeid));
+        }
+
+        function selectAllVisible(table) {
+            const ids = new Set(getVisibleIds(table));
+            document.querySelectorAll(getBulkConfig(table).selector).forEach(cb => { cb.checked = ids.has(cb.value); });
+        }
+
+        function toggleVisibleSelection(table, checked) {
+            const ids = new Set(getVisibleIds(table));
+            document.querySelectorAll(getBulkConfig(table).selector).forEach(cb => { if (ids.has(cb.value)) cb.checked = checked; });
+        }
+
+        async function runBulkDelete(table, ids, actionLabel) {
+            const cfg = getBulkConfig(table);
+            const uniqueIds = [...new Set(ids.map(String))];
+            if (!uniqueIds.length) { showToast('ກະລຸນາເລືອກລາຍການກ່ອນ', 'error'); return; }
+            const extra = table === 'user' ? ' ໝາຍເຫດ: ຂໍ້ມູນ Data ທີ່ອ້າງອີງ userid ເຫຼົ່ານີ້ອາດຖືກລົບຕາມ (ON DELETE CASCADE).' : '';
+            document.getElementById('confirm-message').textContent = `ຢືນຢັນລົບ ${cfg.label} ${actionLabel} ຈຳນວນ ${uniqueIds.length} ລາຍການ?${extra}`;
+            const btn = document.getElementById('btn-confirm-delete');
+            btn.onclick = async () => {
+                btn.disabled = true;
+                try {
+                    for (let i = 0; i < uniqueIds.length; i += 300) {
+                        const chunk = uniqueIds.slice(i, i + 300).map(v => Number(v));
+                        const { error } = await supabaseClient.from(table).delete().in(cfg.pk, chunk);
+                        if (error) throw error;
+                    }
+                    closeModal('modal-confirm');
+                    showToast(`ລົບ ${cfg.label} ສຳເລັດ ${uniqueIds.length} ລາຍການ`);
+                    await fetchAllData();
+                } catch (err) {
+                    showToast('ຜິດພາດໃນການລົບ: ' + err.message, 'error');
+                    await fetchAllData();
+                } finally { btn.disabled = false; }
+            };
+            openModal('modal-confirm');
+        }
+
+        function deleteSelected(table) {
+            const cfg = getBulkConfig(table);
+            const ids = [...document.querySelectorAll(cfg.selector)].filter(cb => cb.checked).map(cb => cb.value);
+            runBulkDelete(table, ids, 'ທີ່ເລືອກ');
+        }
+
+        function deleteAll(table) {
+            const cfg = getBulkConfig(table);
+            runBulkDelete(table, cfg.list.map(row => row[cfg.pk]), 'ທັງໝົດ');
+        }
+
+        // ==================== DELETE CONFIRMATION ====================
+        function confirmDelete(table, id) {
+            const pkCol = table === 'user' ? 'userid' : (table === 'code' ? 'codeid' : 'dataid');
+            document.getElementById('confirm-message').textContent = `ທ່ານແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບ ${table} ລະຫັດ ${id}?`;
+            
+            const btn = document.getElementById('btn-confirm-delete');
+            btn.onclick = async () => {
+                try {
+                    const { error } = await supabaseClient.from(table).delete().eq(pkCol, id);
+                    if (error) throw error;
+                    showToast('ລຶບຂໍ້ມູນສຳເລັດ!');
+                    closeModal('modal-confirm');
+                    await fetchAllData();
+                } catch (err) {
+                    showToast('ຜິດພາດໃນການລຶບ: ' + err.message, 'error');
+                }
+            };
+            openModal('modal-confirm');
+        }
+
+        // ລຶບຂໍ້ມູນຕາຕະລາງ Data ຕາມວັນທີເລີ່ມຕົ້ນ ແລະ ວັນທີສິ້ນສຸດ
+        function confirmDeleteDataByDateRange() {
+            const startStr = document.getElementById('filter-data-start').value;
+            const endStr = document.getElementById('filter-data-end').value;
+
+            if (!startStr || !endStr) {
+                showToast('ກະລຸນາເລືອກທັງ "ວັນທີເລີ່ມຕົ້ນ" ແລະ "ວັນທີສິ້ນສຸດ" ກ່ອນທຳການລຶບ!', 'error');
+                return;
+            }
+
+            const startDate = parseYMD(startStr);
+            const endDate = parseYMD(endStr);
+
+            if (!startDate || !endDate || startDate > endDate) {
+                showToast('ຊ່ວງວັນທີບໍ່ຖືກຕ້ອງ (ວັນທີເລີ່ມຕົ້ນຕ້ອງນ້ອຍກວ່າ ຫຼື ເທົ່າກັບ ວັນທີສິ້ນສຸດ)', 'error');
+                return;
+            }
+
+            // ຄົ້ນຫາລາຍການທັງໝົດໃນ dataList ທີ່ຢູ່ໃນຊ່ວງວັນທີທີ່ກຳນົດ
+            const toDelete = dataList.filter(d => {
+                const rowDate = parseDMY(d.date);
+                return rowDate && rowDate >= startDate && rowDate <= endDate;
+            });
+
+            if (toDelete.length === 0) {
+                showToast('ບໍ່ພົບຂໍ້ມູນໃນຊ່ວງວັນທີທີ່ເລືອກ', 'info');
+                return;
+            }
+
+            const fmtStart = `${startDate.getDate()}/${String(startDate.getMonth() + 1).padStart(2, '0')}/${startDate.getFullYear()}`;
+            const fmtEnd = `${endDate.getDate()}/${String(endDate.getMonth() + 1).padStart(2, '0')}/${endDate.getFullYear()}`;
+
+            document.getElementById('confirm-message').textContent = `ທ່ານແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບຂໍ້ມູນຕັ້ງແຕ່ວັນທີ ${fmtStart} ຫາ ${fmtEnd} (ທັງໝົດ ${toDelete.length} ລາຍການ)?`;
+
+            const btn = document.getElementById('btn-confirm-delete');
+            btn.onclick = async () => {
+                try {
+                    const ids = toDelete.map(d => d.dataid);
+                    // ແບ່ງລຶບເທື່ອລະ 500 ລາຍການເພື່ອປ້ອງກັນ URL ยາວເກີນໄປ
+                    for (let i = 0; i < ids.length; i += 500) {
+                        const chunk = ids.slice(i, i + 500);
+                        const { error } = await supabaseClient.from('data').delete().in('dataid', chunk);
+                        if (error) throw error;
+                    }
+                    showToast(`ລຶບຂໍ້ມູນຕາມຊ່ວງວັນທີສຳເລັດ (${ids.length} ລາຍການ)!`);
+                    closeModal('modal-confirm');
+                    await fetchAllData();
+                } catch (err) {
+                    showToast('ຜິດພາດໃນການລຶບ: ' + err.message, 'error');
+                }
+            };
+            openModal('modal-confirm');
+        }
+
+        // ==================== EXCEL EXPORT & IMPORT (A4 & CUSTOM HEADERS) ====================
+
+        // Helper: Apply standard A4 & Times New Roman styling to ExcelJS sheet
+        function setupA4Sheet(worksheet) {
+            worksheet.pageSetup = {
+                paperSize: 9, // A4
+                orientation: 'landscape',
+                fitToPage: true,
+                fitToWidth: 1,
+                fitToHeight: 0
+            };
+        }
+
+        const thinBorder = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+        };
+
+        // 1. EXPORT DATA EXCEL (Matches the exact image layout: Row 1 no1/no2/1..15, Row 2 ID/Name/Vertical Dates, Row 3+ Data)
+        async function exportDataExcel() {
+            if (usersList.length === 0) {
+                showToast('ບໍ່ມີຂໍ້ມູນ User ສຳລັບສ້າງຕາຕະລາງ Excel', 'error');
+                return;
+            }
+
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Schedule');
+            setupA4Sheet(worksheet);
+
+            // ใช้ข้อมูลที่ผ่านการกรองช่วงวันที่แล้ว (ถ้ามีการเลือกวันเริ่มต้น/สิ้นสุด)
+            const filteredData = getFilteredData();
+            const startStr = document.getElementById('filter-data-start').value;
+            const endStr = document.getElementById('filter-data-end').value;
+
+            let uniqueDates = [];
+
+            // กรณีผู้ใช้เลือกทั้งวันที่เริ่มต้นและสิ้นสุด ให้สร้างคอลัมน์วันที่ครบทุกวันในช่วงนั้น
+            if (startStr && endStr) {
+                const startD = parseYMD(startStr);
+                const endD = parseYMD(endStr);
+                if (startD && endD && startD <= endD) {
+                    let curr = new Date(startD);
+                    while (curr <= endD) {
+                        const d = curr.getDate();
+                        const m = String(curr.getMonth() + 1).padStart(2, '0');
+                        const y = curr.getFullYear();
+                        uniqueDates.push(`${d}/${m}/${y}`);
+                        curr.setDate(curr.getDate() + 1);
+                    }
+                }
+            }
+
+            // หากไม่ได้เลือกช่วงวันที่ครบทั้งคู่ ให้ดึงวันที่ที่มีในข้อมูลที่กรองไว้
+            if (uniqueDates.length === 0) {
+                uniqueDates = [...new Set(filteredData.map(d => d.date))];
+                uniqueDates.sort((a, b) => {
+                    const [d1, m1, y1] = a.split('/').map(Number);
+                    const [d2, m2, y2] = b.split('/').map(Number);
+                    return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
+                });
+            }
+
+            // If no dates exist yet, generate 1/11/2026 to 15/11/2026 as template
+            if (uniqueDates.length === 0) {
+                for (let i = 1; i <= 15; i++) {
+                    uniqueDates.push(`${i}/11/2026`);
+                }
+            }
+
+            // ROW 1: no1, no2, 1, 2, 3...
+            const row1Values = ['no1', 'no2'];
+            uniqueDates.forEach((_, idx) => row1Values.push(idx + 1));
+            const row1 = worksheet.addRow(row1Values);
+            row1.height = 22;
+            row1.eachCell((cell) => {
+                cell.font = { name: 'Times New Roman', size: 12 };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                cell.border = thinBorder;
+            });
+
+            // ROW 2: ID, Name, Vertical Dates (1/11/2026...)
+            const row2Values = ['ID', 'Name', ...uniqueDates];
+            const row2 = worksheet.addRow(row2Values);
+            row2.height = 75; // Tall row for vertical text
+            row2.eachCell((cell, colNumber) => {
+                cell.font = { name: 'Times New Roman', size: 12 };
+                cell.border = thinBorder;
+                if (colNumber <= 2) {
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                } else {
+                    // Vertical rotated text (90 degrees) matching image
+                    cell.alignment = { vertical: 'middle', horizontal: 'center', textRotation: 90 };
+                }
+            });
+
+            // Build lookup map: dataMap[userid][date] = code
+            const dataMap = {};
+            filteredData.forEach(d => {
+                if (!dataMap[d.userid]) dataMap[d.userid] = {};
+                dataMap[d.userid][d.date] = d.code;
+            });
+
+            // Bold codes matching image
+            const boldCodes = ['W/L', 'AL', 'SUB', 'DAH'];
+
+            // ROW 3+: Users & their codes (ຈັດລຽງໃຫ້ section 'FE' ຂຶ້ນກ່ອນ)
+            getSortedUsers().forEach(u => {
+                const rowValues = [formatUserId(u.userid), u.name];
+                uniqueDates.forEach(dt => {
+                    const codeVal = (dataMap[u.userid] && dataMap[u.userid][dt]) ? dataMap[u.userid][dt] : '';
+                    rowValues.push(codeVal);
+                });
+
+                const row = worksheet.addRow(rowValues);
+                row.height = 22;
+                row.eachCell((cell, colNumber) => {
+                    const valStr = String(cell.value || '').toUpperCase();
+                    const isBoldCode = colNumber > 2 && boldCodes.includes(valStr);
+                    
+                    cell.font = { 
+                        name: 'Times New Roman', 
+                        size: colNumber > 2 ? 10 : 12,
+                        bold: isBoldCode
+                    };
+                    cell.border = thinBorder;
+
+                    if (colNumber === 1) {
+                        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                    } else if (colNumber === 2) {
+                        cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+                    } else {
+                        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                    }
+                });
+            });
+
+            // Column Widths matching image proportions
+            worksheet.getColumn(1).width = 8;  // ID
+            worksheet.getColumn(2).width = 32; // Name
+            for (let i = 3; i <= uniqueDates.length + 2; i++) {
+                worksheet.getColumn(i).width = 6.5; // Date columns
+            }
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), `Schedule_Export_A4_${new Date().toISOString().slice(0,10)}.xlsx`);
+            showToast('Export Excel (A4) ສຳເລັດແລ້ວ!');
+        }
+
+
+        // 1B. EXPORT DATA EXCEL (Calendar layout matching the attached reference image)
+        // Row 1: name | ID | 1..last day of month
+        // Row 2: blank | blank | sun | mon | tue ...
+        // Row 3+: one row per employee, with the code under its calendar day
+        async function exportDataExcelCalendar() {
+            if (!usersList.length) {
+                if (window.Swal) {
+                    await Swal.fire({ icon: 'warning', title: 'ບໍ່ມີຂໍ້ມູນ', text: 'ບໍ່ມີຂໍ້ມູນ User ສຳລັບສ້າງຕາຕະລາງ Excel', confirmButtonText: 'ຕົກລົງ' });
+                } else {
+                    showToast('ບໍ່ມີຂໍ້ມູນ User ສຳລັບສ້າງຕາຕະລາງ Excel', 'error');
+                }
+                return;
+            }
+
+            try {
+                // Ask which user.section should be included in this export.
+                // "ALL" keeps every section; entering a number or exact section name selects one section.
+                const sectionValues = [...new Set(usersList.map(u => (u.section || '').trim()))]
+                    .sort((a, b) => a.localeCompare(b));
+
+                // SweetAlert2 dropdown: select ALL or one exact user.section.
+                const sectionOptions = { ALL: 'ALL - ທຸກພະແນກ' };
+                sectionValues.forEach((section, index) => {
+                    const optionKey = section === '' ? '__EMPTY_SECTION__' : `SECTION_${index}`;
+                    sectionOptions[optionKey] = section || '(ບໍ່ລະບຸ Section)';
+                });
+
+                const sectionDialog = await Swal.fire({
+                    title: 'ເລືອກພະແນກສຳລັບ Export',
+                    text: 'ກະລຸນາເລືອກ Section ທີ່ຕ້ອງການສົ່ງອອກເປັນ Excel',
+                    input: 'select',
+                    inputOptions: sectionOptions,
+                    inputPlaceholder: '-- ເລືອກ Section --',
+                    inputValue: 'ALL',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fa-solid fa-file-excel"></i> Export Excel',
+                    cancelButtonText: 'ຍົກເລີກ',
+                    confirmButtonColor: '#16a34a',
+                    cancelButtonColor: '#64748b',
+                    reverseButtons: true,
+                    allowOutsideClick: false,
+                    customClass: {
+                        popup: 'font-sans',
+                        title: 'text-xl',
+                        input: 'text-base'
+                    },
+                    inputValidator: value => value ? undefined : 'ກະລຸນາເລືອກ Section ກ່ອນ'
+                });
+                if (!sectionDialog.isConfirmed) return;
+
+                const selectedSectionKey = sectionDialog.value;
+                let selectedUsers;
+                if (selectedSectionKey === 'ALL') {
+                    selectedUsers = [...usersList];
+                } else if (selectedSectionKey === '__EMPTY_SECTION__') {
+                    selectedUsers = usersList.filter(u => !(u.section || '').trim());
+                } else {
+                    const selectedIndex = Number(selectedSectionKey.replace('SECTION_', ''));
+                    const selectedSection = sectionValues[selectedIndex];
+                    selectedUsers = usersList.filter(u => (u.section || '').trim() === selectedSection);
+                }
+                if (!selectedUsers.length) {
+                    await Swal.fire({ icon: 'warning', title: 'ບໍ່ພົບຂໍ້ມູນ', text: 'ບໍ່ມີ User ໃນ Section ທີ່ເລືອກ', confirmButtonText: 'ຕົກລົງ' });
+                    return;
+                }
+                const selectedUserIds = new Set(selectedUsers.map(u => Number(u.userid)));
+                const filteredData = getFilteredData().filter(d => selectedUserIds.has(Number(d.userid)));
+                const startStr = document.getElementById('filter-data-start').value;
+                const endStr = document.getElementById('filter-data-end').value;
+
+                let monthSource = parseYMD(startStr) || parseYMD(endStr);
+                if (!monthSource && filteredData.length) monthSource = parseDMY(filteredData[0].date);
+                if (!monthSource && dataList.length) monthSource = parseDMY(dataList[0].date);
+                if (!monthSource) monthSource = new Date();
+
+                const year = monthSource.getFullYear();
+                const month = monthSource.getMonth();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const totalCols = daysInMonth + 2;
+                const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                    'July', 'August', 'September', 'October', 'November', 'December'];
+                const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+                const workbook = new ExcelJS.Workbook();
+                const worksheet = workbook.addWorksheet('Calendar');
+                setupA4Sheet(worksheet);
+                worksheet.views = [{ state: 'frozen', xSplit: 2, ySplit: 4 }];
+                worksheet.properties.defaultRowHeight = 21;
+                // Force the exported schedule to fit neatly on ONE A4 landscape page.
+                worksheet.pageSetup = {
+                    paperSize: 9,                 // A4 (210 x 297 mm)
+                    orientation: 'landscape',
+                    fitToPage: true,
+                    fitToWidth: 1,
+                    fitToHeight: 1,
+                    horizontalCentered: true,
+                    verticalCentered: false,
+                    margins: {
+                        left: 0.15, right: 0.15,
+                        top: 0.2, bottom: 0.2,
+                        header: 0.08, footer: 0.08
+                    }
+                };
+                worksheet.pageSetup.printArea = `A1:${worksheet.getColumn(totalCols).letter}${worksheet.rowCount + selectedUsers.length * 2 + 10}`;
+
+                // Title is a real Excel cell (merged, not an image), so users can edit it.
+                worksheet.mergeCells(1, 1, 1, totalCols);
+                const titleCell = worksheet.getCell(1, 1);
+                titleCell.value = `Monthly Schedule for IT the month of ${monthNames[month]} ${year}`;
+                titleCell.font = { name: 'Times New Roman', size: 20, bold: true };
+                titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+                worksheet.getRow(1).height = 42;
+                worksheet.getRow(2).height = 12;
+
+                const row1Values = ['Date', 'ID'];
+                const row2Values = ['Day', ''];
+                for (let day = 1; day <= daysInMonth; day++) {
+                    row1Values.push(day);
+                    row2Values.push(weekdayNames[new Date(year, month, day).getDay()]);
+                }
+
+                const header1 = worksheet.addRow(row1Values); // row 3
+                const header2 = worksheet.addRow(row2Values); // row 4
+                worksheet.mergeCells(3, 1, 4, 1);
+                worksheet.mergeCells(3, 2, 4, 2);
+                header1.height = 24;
+                header2.height = 22;
+
+                for (let col = 1; col <= totalCols; col++) {
+                    for (let rowNum = 3; rowNum <= 4; rowNum++) {
+                        const cell = worksheet.getCell(rowNum, col);
+                        cell.font = { name: 'Times New Roman', size: 10, bold: true };
+                        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                        cell.border = thinBorder;
+                    }
+                }
+                worksheet.getCell(3, 1).value = 'Date\nDay';
+                worksheet.getCell(3, 1).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                worksheet.getCell(3, 2).value = 'ID';
+
+                // Highlight weekend headings to match the sample schedule.
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const weekday = new Date(year, month, day).getDay();
+                    const weekdayCell = worksheet.getCell(4, day + 2);
+                    if (weekday === 0) {
+                        weekdayCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF3333' } };
+                        weekdayCell.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+                    } else if (weekday === 6) {
+                        weekdayCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE699' } };
+                    }
+                }
+
+                const dataMap = {};
+                filteredData.forEach(record => {
+                    const dateObj = parseDMY(record.date);
+                    if (!dateObj || dateObj.getFullYear() !== year || dateObj.getMonth() !== month) return;
+                    if (!dataMap[record.userid]) dataMap[record.userid] = {};
+                    dataMap[record.userid][dateObj.getDate()] = record.code || '';
+                });
+
+                getSortedUsers(selectedUsers).forEach(user => {
+                    const firstRowNumber = worksheet.rowCount + 1;
+                    const values = [user.name || '', formatUserId(user.userid)];
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        values.push(dataMap[user.userid]?.[day] || '');
+                    }
+
+                    const dataRow = worksheet.addRow(values);
+                    const blankRow = worksheet.addRow(new Array(totalCols).fill(''));
+                    dataRow.height = 22;
+                    blankRow.height = 22;
+
+                    worksheet.mergeCells(firstRowNumber, 1, firstRowNumber + 1, 1);
+                    worksheet.mergeCells(firstRowNumber, 2, firstRowNumber + 1, 2);
+
+                    [dataRow, blankRow].forEach((row, rowIndex) => {
+                        for (let colNumber = 1; colNumber <= totalCols; colNumber++) {
+                            const cell = row.getCell(colNumber);
+                            const code = String(cell.value || '').trim().toUpperCase();
+                            cell.font = {
+                                name: 'Times New Roman',
+                                size: colNumber > 2 ? 10 : 11,
+                                bold: rowIndex === 0 && ['W/L', 'AL', 'SUB', 'DAH'].includes(code)
+                            };
+                            cell.border = thinBorder;
+                            cell.alignment = {
+                                vertical: 'middle',
+                                horizontal: colNumber === 1 ? 'center' : 'center',
+                                wrapText: true
+                            };
+                            if (rowIndex === 0 && code === '15A') {
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFD92E' } };
+                                cell.font = { name: 'Times New Roman', size: 10, bold: true };
+                            }
+                        }
+                    });
+                    dataRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                    dataRow.getCell(2).alignment = { vertical: 'middle', horizontal: 'center' };
+                });
+
+                worksheet.getColumn(1).width = 25;
+                worksheet.getColumn(2).width = 9;
+                for (let col = 3; col <= totalCols; col++) worksheet.getColumn(col).width = 6.5;
+
+                // Editable legend/footer cells. Each line is split into merged cells
+                // so the wording can be changed directly in Excel after export.
+                const footerTop = worksheet.rowCount + 2;
+                worksheet.getRow(footerTop).height = 24;
+                worksheet.getRow(footerTop + 1).height = 24;
+                worksheet.getRow(footerTop + 2).height = 12;
+
+                const mergeText = (rowNum, startCol, endCol, value, opts = {}) => {
+                    if (endCol > startCol) worksheet.mergeCells(rowNum, startCol, rowNum, endCol);
+                    const cell = worksheet.getCell(rowNum, startCol);
+                    cell.value = value;
+                    cell.font = { name: 'Times New Roman', size: opts.size || 11, bold: opts.bold !== false };
+                    cell.alignment = { vertical: 'middle', horizontal: opts.align || 'center', wrapText: true };
+                    return cell;
+                };
+
+                const splitCols = (rowNum, items) => {
+                    const usableCols = totalCols;
+                    let cursor = 1;
+                    items.forEach((item, index) => {
+                        const next = index === items.length - 1
+                            ? usableCols
+                            : Math.max(cursor, Math.round((usableCols * (index + 1)) / items.length));
+                        mergeText(rowNum, cursor, next, item, { size: 10 });
+                        cursor = next + 1;
+                    });
+                };
+
+                splitCols(footerTop, [
+                    '06A = 06:00 - 15:00',
+                    'D = 08:00 - 17:00',
+                    '12A = 12:00 - 21:00',
+                    '21A = 21:00 - 06:00',
+                    '07A = 07:00 - 16:00'
+                ]);
+                splitCols(footerTop + 1, [
+                    '10C = 10:30 - 19:30',
+                    'W/L = Week Leave',
+                    'S/L = Sick Leave',
+                    '15A = 15:00 - 24:00'
+                ]);
+
+                worksheet.getRow(footerTop + 2).height = 12;
+                worksheet.getRow(footerTop + 3).height = 28;
+                splitCols(footerTop + 3, [
+                    'General Director',
+                    'J - Deputy General Director',
+                    'L - Deputy General Director',
+                    'Facility Dept., Manager',
+                    'Assistant Manager'
+                ]);
+
+                // All footer labels and the title remain normal editable Excel text.
+                worksheet.pageSetup.printArea = `A1:${worksheet.getColumn(totalCols).letter}${footerTop + 3}`;
+                worksheet.pageSetup.paperSize = 9;
+                worksheet.pageSetup.orientation = 'landscape';
+                worksheet.pageSetup.fitToPage = true;
+                worksheet.pageSetup.fitToWidth = 1;
+                worksheet.pageSetup.fitToHeight = 1;
+                worksheet.pageSetup.horizontalCentered = true;
+
+                const monthLabel = `${String(month + 1).padStart(2, '0')}-${year}`;
+                const sectionLabel = selectedUsers.length === usersList.length
+                    ? 'ALL'
+                    : String(selectedUsers[0].section || 'NO_SECTION').replace(/[^\\w-]+/g, '_');
+                const buffer = await workbook.xlsx.writeBuffer();
+                saveAs(new Blob([buffer]), `Schedule_Calendar_${monthLabel}_${sectionLabel}.xlsx`);
+                showToast('Export Excel ແບບປະຕິທິນພ້ອມຫົວຂໍ້ ແລະ ລາຍລະອຽດດ້ານລຸ່ມສຳເລັດແລ້ວ!');
+            } catch (err) {
+                console.error('Calendar Excel export error:', err);
+                showToast('Export Excel ຜິດພາດ: ' + err.message, 'error');
+            }
+        }
+
+        // 2. IMPORT DATA EXCEL (Reads Matrix format matching image: Row 2 has ID, Name, Dates; Row 3+ has User & Codes)
+        function normalizeImportDate(value) {
+            if (value === null || value === undefined || value === '') return '';
+            const raw = String(value).trim();
+            const m = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+            if (m) return `${Number(m[1])}/${String(Number(m[2])).padStart(2, '0')}/${m[3]}`;
+            const d = new Date(raw);
+            if (!isNaN(d.getTime())) return `${d.getDate()}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+            return raw;
+        }
+
+        async function importDataExcel(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
+                    if (rows.length < 3) throw new Error('ຮູບແບບ Excel ບໍ່ຖືກຕ້ອງ (ຕ້ອງມີຢ່າງໜ້ອຍ 3 ແຖວ)');
+                    const headerRow = rows[1] || [];
+                    const dateCols = [];
+                    for (let c = 2; c < headerRow.length; c++) {
+                        if (headerRow[c] !== '' && headerRow[c] !== null) {
+                            const dateStr = normalizeImportDate(headerRow[c]);
+                            if (dateStr) dateCols.push({ colIndex: c, dateStr });
+                        }
+                    }
+                    if (!dateCols.length) throw new Error('ບໍ່ພົບຖັນວັນທີໃນ Row 2');
+
+                    const existingKeys = new Set(dataList.map(d => `${Number(d.userid)}|${normalizeImportDate(d.date)}`));
+                    const seenKeys = new Set();
+                    const importUsers = [];
+                    const previewRows = [];
+                    const records = [];
+                    for (let r = 2; r < rows.length; r++) {
+                        const row = rows[r] || [];
+                        if (row[0] === '' || row[0] === null || row[0] === undefined) continue;
+                        const userid = parseInt(String(row[0]).trim(), 10);
+                        if (!Number.isInteger(userid)) continue;
+                        const name = row[1] ? String(row[1]).trim() : `User ${userid}`;
+                        if (!usersList.some(u => Number(u.userid) === userid) && !importUsers.some(u => u.userid === userid))
+                            importUsers.push({ userid, name, section: '' });
+
+                        const cells = [];
+                        dateCols.forEach(dc => {
+                            const code = row[dc.colIndex] === null || row[dc.colIndex] === undefined ? '' : String(row[dc.colIndex]).trim();
+                            if (!code) { cells.push({ date: dc.dateStr, code: '', status: 'empty' }); return; }
+                            const key = `${userid}|${dc.dateStr}`;
+                            const duplicate = existingKeys.has(key) || seenKeys.has(key);
+                            if (!duplicate) { seenKeys.add(key); records.push({ userid, code, date: dc.dateStr, comment: '' }); }
+                            cells.push({ date: dc.dateStr, code, status: duplicate ? 'duplicate' : 'new' });
+                        });
+                        previewRows.push({ userid, name, cells });
+                    }
+                    if (!previewRows.length) throw new Error('ບໍ່ພົບລາຍການ UserID ໃນໄຟລ໌ Excel');
+                    pendingDataImport = { records, users: importUsers, dates: dateCols.map(x => x.dateStr), rows: previewRows, fileName: file.name };
+                    renderDataImportPreview();
+                    document.getElementById('import-preview-panel').classList.remove('hidden');
+                    document.getElementById('import-preview-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    const dupCount = previewRows.reduce((n, r) => n + r.cells.filter(c => c.status === 'duplicate').length, 0);
+                    showToast(`Preview ສຳເລັດ: ໃໝ່ ${records.length} ລາຍການ, ຊ້ຳ ${dupCount} ລາຍການ (ຍັງບໍ່ໄດ້ບັນທຶກ)`, 'info');
+                } catch (err) { showToast('Import ຜິດພາດ: ' + err.message, 'error'); }
+                finally { event.target.value = ''; }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function escapeImportHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+        }
+
+        function renderDataImportPreview() {
+            if (!pendingDataImport) return;
+            const { dates, rows, records } = pendingDataImport;
+            const table = document.getElementById('import-preview-table');
+            let html = '<thead><tr><th class="border border-black bg-gray-100 px-2 py-2 sticky left-0 z-20">ID</th><th class="border border-black bg-gray-100 px-3 py-2 sticky left-[55px] z-20">Name</th>';
+            dates.forEach((date, i) => { html += `<th class="border border-black bg-gray-100 px-2 py-2 min-w-[70px]"><div class="text-xs text-gray-500">${i+1}</div><div class="whitespace-nowrap">${escapeImportHtml(date)}</div></th>`; });
+            html += '</tr></thead><tbody>';
+            rows.forEach(row => {
+                html += `<tr><td class="border border-black px-2 py-2 text-center bg-white sticky left-0">${formatUserId(row.userid)}</td><td class="border border-black px-3 py-2 whitespace-nowrap bg-white sticky left-[55px]">${escapeImportHtml(row.name)}</td>`;
+                row.cells.forEach(cell => {
+                    const cls = cell.status === 'new' ? 'bg-emerald-100 text-emerald-900' : cell.status === 'duplicate' ? 'bg-red-100 text-red-700 line-through' : 'bg-white text-gray-300';
+                    const title = cell.status === 'duplicate' ? 'ມີ userid + date ແລ້ວ: ຂ້າມລາຍການນີ້' : cell.status === 'new' ? 'ລາຍການໃໝ່: ຈະບັນທຶກ' : '';
+                    html += `<td title="${title}" class="border border-black px-2 py-2 text-center font-bold ${cls}">${escapeImportHtml(cell.code)}</td>`;
+                });
+                html += '</tr>';
+            });
+            table.innerHTML = html + '</tbody>';
+            const dupCount = rows.reduce((n, r) => n + r.cells.filter(c => c.status === 'duplicate').length, 0);
+            document.getElementById('import-preview-summary').textContent = `${pendingDataImport.fileName} | ${rows.length} ຄົນ | ໃໝ່ ${records.length} ລາຍການ | ຊ້ຳ ${dupCount} ລາຍການ`;
+            const btn = document.getElementById('btn-confirm-data-import');
+            btn.disabled = records.length === 0;
+            btn.classList.toggle('opacity-50', records.length === 0);
+        }
+
+        function cancelDataImportPreview() {
+            pendingDataImport = null;
+            document.getElementById('import-preview-panel').classList.add('hidden');
+            document.getElementById('import-preview-table').innerHTML = '';
+        }
+
+        async function confirmDataImport() {
+            if (!pendingDataImport) return;
+            const btn = document.getElementById('btn-confirm-data-import');
+            btn.disabled = true;
+            btn.textContent = 'ກຳລັງບັນທຶກ...';
+            try {
+                if (pendingDataImport.users.length) {
+                    // Upsert user rows in small batches to avoid request-size limits.
+                    for (let i = 0; i < pendingDataImport.users.length; i += 300) {
+                        const batch = pendingDataImport.users.slice(i, i + 300);
+                        const { error } = await supabaseClient.from('user')
+                            .upsert(batch, { onConflict: 'userid', ignoreDuplicates: true });
+                        if (error) throw error;
+                    }
+                }
+
+                // Always read the complete database table in pages. Supabase commonly
+                // limits a single response to 1,000 rows; a single select can miss
+                // existing userid+date pairs and can also produce an incorrect max dataid.
+                const latestData = await fetchAllRows('data', 'dataid');
+                const latestKeys = new Set(
+                    latestData.map(d => `${Number(d.userid)}|${normalizeImportDate(d.date)}`)
+                );
+
+                const candidates = pendingDataImport.records;
+                const safeRecords = candidates.filter(r => {
+                    const key = `${Number(r.userid)}|${normalizeImportDate(r.date)}`;
+                    if (latestKeys.has(key)) return false;
+                    latestKeys.add(key); // protect against duplicates within the same import
+                    return true;
+                });
+
+                let nextDataId = latestData.reduce((max, d) =>
+                    Math.max(max, Number(d.dataid) || 0), 0);
+                const rowsToInsert = safeRecords.map(r => ({ ...r, dataid: ++nextDataId }));
+
+                // Insert in chunks. If a large import is interrupted, a retry will
+                // re-check the database and skip rows already inserted successfully.
+                let insertedCount = 0;
+                for (let i = 0; i < rowsToInsert.length; i += 300) {
+                    const batch = rowsToInsert.slice(i, i + 300);
+                    const { error } = await supabaseClient.from('data').insert(batch);
+                    if (error) throw new Error(`ບັນທຶກຊຸດທີ ${Math.floor(i / 300) + 1} ບໍ່ສຳເລັດ: ${error.message}`);
+                    insertedCount += batch.length;
+                    btn.textContent = `ກຳລັງບັນທຶກ... ${insertedCount}/${rowsToInsert.length}`;
+                }
+
+                const skipped = candidates.length - insertedCount;
+                showToast(`ບັນທຶກສຳເລັດ ${insertedCount} ລາຍການ | ຂ້າມລາຍການຊ້ຳ ${skipped} ລາຍການ`);
+                cancelDataImportPreview();
+                await fetchAllData();
+            } catch (err) {
+                showToast('Import ບັນທຶກໄດ້ບາງສ່ວນ/ຜິດພາດ: ' + err.message + ' | ກົດບັນທຶກອີກຄັ້ງໄດ້, ລະບົບຈະຂ້າມລາຍການທີ່ບັນທຶກແລ້ວ', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up mr-1"></i> ບັນທຶກລາຍການໃໝ່';
+            }
+        }
+
+        // 3. EXPORT USER EXCEL (A4 & Times New Roman & Row 1/Row 2 headers)
+        async function exportUserExcel() {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Users');
+            setupA4Sheet(worksheet);
+
+            const r1 = worksheet.addRow(['no1', 'no2', 'no3']);
+            const r2 = worksheet.addRow(['ID', 'Name', 'Section']);
+            [r1, r2].forEach(row => {
+                row.height = 24;
+                row.eachCell(cell => {
+                    cell.font = { name: 'Times New Roman', size: 12, bold: true };
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                    cell.border = thinBorder;
+                });
+            });
+
+            usersList.forEach(u => {
+                const row = worksheet.addRow([formatUserId(u.userid), u.name, u.section || '']);
+                row.height = 22;
+                row.eachCell((cell, col) => {
+                    cell.font = { name: 'Times New Roman', size: 12 };
+                    cell.border = thinBorder;
+                    cell.alignment = { vertical: 'middle', horizontal: col === 2 ? 'left' : 'center' };
+                });
+            });
+
+            worksheet.getColumn(1).width = 12;
+            worksheet.getColumn(2).width = 35;
+            worksheet.getColumn(3).width = 25;
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), `Users_Export_A4.xlsx`);
+            showToast('Export User Excel ສຳເລັດ!');
+        }
+
+        // 4. IMPORT USER EXCEL
+        async function importUserExcel(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+                    const usersToUpsert = [];
+                    // Start from Row 3 (index 2) to skip Row 1 & Row 2 headers
+                    for (let r = 2; r < rows.length; r++) {
+                        const row = rows[r];
+                        if (!row || !row[0]) continue;
+                        const userid = parseInt(row[0]);
+                        const name = row[1] ? String(row[1]).trim() : '';
+                        const section = row[2] ? String(row[2]).trim() : '';
+                        if (!isNaN(userid) && name) {
+                            usersToUpsert.push({ userid, name, section });
+                        }
+                    }
+
+                    if (usersToUpsert.length > 0) {
+                        const { error } = await supabaseClient.from('user').upsert(usersToUpsert);
+                        if (error) throw error;
+                        showToast(`Import User ສຳເລັດ (${usersToUpsert.length} ຄົນ)!`);
+                        await fetchAllData();
+                    }
+                } catch (err) {
+                    showToast('Import User ຜິດພາດ: ' + err.message, 'error');
+                } finally {
+                    event.target.value = '';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 5. EXPORT CODE EXCEL (A4 & Times New Roman)
+        async function exportCodeExcel() {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Codes');
+            setupA4Sheet(worksheet);
+
+            const r1 = worksheet.addRow(['no1', 'no2']);
+            const r2 = worksheet.addRow(['CodeID', 'Code']);
+            [r1, r2].forEach(row => {
+                row.height = 24;
+                row.eachCell(cell => {
+                    cell.font = { name: 'Times New Roman', size: 12, bold: true };
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                    cell.border = thinBorder;
+                });
+            });
+
+            codesList.forEach(c => {
+                const row = worksheet.addRow([c.codeid, c.code]);
+                row.height = 22;
+                row.eachCell(cell => {
+                    cell.font = { name: 'Times New Roman', size: 12 };
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                    cell.border = thinBorder;
+                });
+            });
+
+            worksheet.getColumn(1).width = 15;
+            worksheet.getColumn(2).width = 25;
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), `Codes_Export_A4.xlsx`);
+            showToast('Export Code Excel ສຳເລັດ!');
+        }
+
+        // 6. IMPORT CODE EXCEL
+        async function importCodeExcel(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+                    const codesToUpsert = [];
+                    for (let r = 2; r < rows.length; r++) {
+                        const row = rows[r];
+                        if (!row || !row[0]) continue;
+                        const codeid = parseInt(row[0]);
+                        const code = row[1] ? String(row[1]).trim() : '';
+                        if (!isNaN(codeid) && code) {
+                            codesToUpsert.push({ codeid, code });
+                        }
+                    }
+
+                    if (codesToUpsert.length > 0) {
+                        const { error } = await supabaseClient.from('code').upsert(codesToUpsert);
+                        if (error) throw error;
+                        showToast(`Import Code ສຳເລັດ (${codesToUpsert.length} ລະຫັດ)!`);
+                        await fetchAllData();
+                    }
+                } catch (err) {
+                    showToast('Import Code ຜິດພາດ: ' + err.message, 'error');
+                } finally {
+                    event.target.value = '';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+    </script>
+</body>
+</html>
