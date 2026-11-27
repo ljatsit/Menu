@@ -829,16 +829,20 @@
             let nameOptionsHtml = '<option value="">-- ເລືອກຊື່ ແລະ ນາມສະກຸນ --</option>';
 
             users.forEach(item => {
-                const uidVal = String(item.userid !== undefined && item.userid !== null ? item.userid : (item.id || ''));
-                const nameVal = item.name || '(ບໍ່ມີຊື່)';
+                const uidVal = normalizeUserId(item.userid ?? item.id ?? '');
+                const nameVal = String(item.name ?? '(ບໍ່ມີຊື່)');
                 if (uidVal) {
-                    idOptionsHtml += `<option value="${uidVal}">${uidVal}</option>`;
-                    nameOptionsHtml += `<option value="${uidVal}">${nameVal}</option>`;
+                    const idOption = document.createElement('option');
+                    idOption.value = uidVal;
+                    idOption.textContent = uidVal;
+                    elUserId.appendChild(idOption);
+
+                    const nameOption = document.createElement('option');
+                    nameOption.value = uidVal;
+                    nameOption.textContent = nameVal;
+                    elUserName.appendChild(nameOption);
                 }
             });
-
-            elUserId.innerHTML = idOptionsHtml;
-            elUserName.innerHTML = nameOptionsHtml;
 
             if (preserveSelectedId && users.some(u => String(u.userid ?? u.id ?? '') === preserveSelectedId)) {
                 elUserId.value = preserveSelectedId;
@@ -899,53 +903,94 @@
             }
         }
 
-        // Fetch `code` and `comment` from `data` table when Date & UserID are selected
-        async function fetchDataRecord() {
-            const uid = elUserId.value.trim();
-            const isoDate = elDatePicker.value; // YYYY-MM-DD
-            const formattedDate = elDateDisplay.value; // dd/MM/yyyy
+        // Normalize database date values without UTC/time-zone shifting.
+        // Supports DATE (YYYY-MM-DD), text (dd/MM/yyyy), and timestamp values.
+        function normalizeDbDate(value) {
+            if (value === null || value === undefined || value === '') return '';
+            const raw = String(value).trim();
+            let m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+            m = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+            if (m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+            return '';
+        }
 
+        function normalizeUserId(value) {
+            return value === null || value === undefined ? '' : String(value).trim();
+        }
+
+        function extractCodeValue(value) {
+            if (value === null || value === undefined) return '';
+            if (typeof value === 'object') {
+                return String(value.code ?? value.value ?? value.name ?? '');
+            }
+            return String(value);
+        }
+
+        let fetchRequestToken = 0;
+
+        // Fetch a user's records, then compare dates consistently in the browser.
+        // This avoids Postgres DATE casting errors caused by mixing ISO and dd/MM/yyyy
+        // in a single .or() expression.
+        async function fetchDataRecord() {
+            const uid = normalizeUserId(elUserId.value);
+            const isoDate = elDatePicker.value;
             if (!uid || !isoDate) return;
 
+            const requestToken = ++fetchRequestToken;
             dataLoader.classList.remove('hidden');
             dataStatusBadge.classList.add('hidden');
-            elRecordId.value = '';
 
             try {
-                // Query table `data` matching userid and date (supports either YYYY-MM-DD or dd/MM/yyyy stored in DB)
-                const { data, error } = await supabaseClient
+                let rows = [];
+                let queryError = null;
+
+                const result = await supabaseClient
                     .from('data')
                     .select('*')
-                    .eq('userid', uid)
-                    .or(`date.eq.${isoDate},date.eq.${formattedDate}`)
-                    .limit(1)
-                    .maybeSingle();
+                    .eq('userid', uid);
 
-                if (error) throw error;
+                if (result.error) {
+                    queryError = result.error;
+                    // Fallback handles installations where userid has a different
+                    // database type or a legacy column mapping.
+                    const fallback = await supabaseClient.from('data').select('*');
+                    if (fallback.error) throw queryError;
+                    rows = fallback.data || [];
+                } else {
+                    rows = result.data || [];
+                }
 
-                if (data) {
-                    // Record found! Populate textbox4 (code) and textbox5 (comment)
-                    elRecordId.value = data.id || '';
-                    elCodeInput.value = data.code || '';
-                    elCommentInput.value = data.comment || '';
+                if (requestToken !== fetchRequestToken) return;
+
+                const matched = rows.find(row =>
+                    normalizeUserId(row.userid) === uid &&
+                    normalizeDbDate(row.date) === isoDate
+                );
+
+                if (matched) {
+                    elRecordId.value = matched.id ?? '';
+                    elCodeInput.value = extractCodeValue(matched.code);
+                    elCommentInput.value = matched.comment ?? '';
 
                     dataStatusBadge.textContent = '✓ ພົບຂໍ້ມູນແລ້ວ';
                     dataStatusBadge.className = 'text-xs px-2.5 py-1 rounded-full font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200/60';
                     dataStatusBadge.classList.remove('hidden');
                 } else {
-                    // No record found for this user + date
+                    elRecordId.value = '';
                     elCodeInput.value = '';
                     elCommentInput.value = '';
-
                     dataStatusBadge.textContent = '! ບໍ່ພົບຂໍ້ມູນວັນທີນີ້';
                     dataStatusBadge.className = 'text-xs px-2.5 py-1 rounded-full font-semibold bg-amber-100 text-amber-700 border border-amber-200/60';
                     dataStatusBadge.classList.remove('hidden');
                 }
             } catch (err) {
-                console.error('Error fetching data record:', err);
-                showMessage(`ດຶງຂໍ້ມູນບໍ່ສຳເລັດ: ${err.message}`, 'error');
+                if (requestToken === fetchRequestToken) {
+                    console.error('Error fetching data record:', err);
+                    showMessage(`ດຶງຂໍ້ມູນບໍ່ສຳເລັດ: ${err.message}`, 'error');
+                }
             } finally {
-                dataLoader.classList.add('hidden');
+                if (requestToken === fetchRequestToken) dataLoader.classList.add('hidden');
             }
         }
 
@@ -977,6 +1022,13 @@
             }
         }
 
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, ch => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[ch]);
+        }
+
         // Render code items inside modal.
         // Priority order: AL -> SUB -> DAH, then remaining codes alphabetically.
         function renderCodeList(items, focusAL = false) {
@@ -1000,21 +1052,22 @@
             });
 
             elCodeListContainer.innerHTML = sortedItems.map(item => {
-                const codeVal = item.code || '';
-                const descVal = item.name || item.description || item.detail || '';
+                const codeVal = String(item.code ?? '');
+                const descVal = String(item.name ?? item.description ?? item.detail ?? '');
+                const safeCode = escapeHtml(codeVal);
+                const safeDesc = escapeHtml(descVal);
                 const isSelected = codeVal === currentCode && currentCode !== '';
                 
                 return `
-                    <button type="button" ${String(codeVal).trim().toUpperCase() === 'AL' ? 'id="code-option-al"' : ''} data-code-value="${codeVal}"
-                        onclick="selectCodeItem('${codeVal.replace(/'/g, "\\'")}')"
+                    <button type="button" ${String(codeVal).trim().toUpperCase() === 'AL' ? 'id="code-option-al"' : ''} data-code-value="${safeCode}"
                         class="w-full text-left p-3.5 rounded-2xl border ${isSelected ? 'border-indigo-500 bg-indigo-50/80 ring-1 ring-indigo-500' : 'border-slate-200/80 bg-white hover:border-indigo-400 hover:bg-indigo-50/40'} active:scale-[0.99] transition flex items-center justify-between group shadow-2xs">
                         <div class="flex items-center gap-3">
                             <div class="w-9 h-9 rounded-xl ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-600'} flex items-center justify-center font-bold text-xs shrink-0 transition">
                                 <i data-lucide="tag" class="w-4 h-4"></i>
                             </div>
                             <div>
-                                <div class="font-bold ${isSelected ? 'text-indigo-900' : 'text-slate-800 group-hover:text-indigo-700'} text-base">${codeVal}</div>
-                                ${descVal ? `<div class="text-xs text-slate-500 mt-0.5">${descVal}</div>` : ''}
+                                <div class="font-bold ${isSelected ? 'text-indigo-900' : 'text-slate-800 group-hover:text-indigo-700'} text-base">${safeCode}</div>
+                                ${safeDesc ? `<div class="text-xs text-slate-500 mt-0.5">${safeDesc}</div>` : ''}
                             </div>
                         </div>
                         ${isSelected 
@@ -1040,22 +1093,26 @@
         }
 
         // Select a code from the modal and close it
+        elCodeListContainer.addEventListener('click', (event) => {
+            const button = event.target.closest('button[data-code-value]');
+            if (button) window.selectCodeItem(button.dataset.codeValue || '');
+        });
+
         window.selectCodeItem = function(selectedCode) {
             elCodeInput.value = selectedCode;
             closeModal();
         };
 
-        // Save / Update ONLY `code` and `comment` in `data` table
+        // Save / Update ONLY `code` and `comment` in `data` table.
+        // Supports tables with an `id` primary key and legacy tables without it.
         async function saveEditData(e) {
             e.preventDefault();
             hideMessage();
 
-            const uid = elUserId.value.trim();
+            const uid = normalizeUserId(elUserId.value);
             const isoDate = elDatePicker.value;
-            const formattedDate = elDateDisplay.value;
             const newCode = elCodeInput.value.trim();
             const newComment = elCommentInput.value.trim();
-            const recordId = elRecordId.value;
 
             if (!uid) {
                 showMessage('ກະລຸນາເລືອກ User ID ຫຼື ຊື່ຜູ້ໃຊ້ກ່ອນ', 'error');
@@ -1066,45 +1123,78 @@
                 showMessage('ກະລຸນາເລືອກວັນທີ', 'error');
                 return;
             }
+            if (!newCode) {
+                showMessage('ກະລຸນາເລືອກ Code ກ່ອນບັນທຶກ', 'error');
+                return;
+            }
 
-            // Set loading state on save button and global overlay
             showGlobalLoading('ກຳລັງບັນທຶກຂໍ້ມູນ...', 'ກຳລັງອັບເດດ Code ແລະ Comment ໃນລະບົບ');
             btnSave.disabled = true;
             btnSaveText.textContent = 'ກຳລັງບັນທຶກ...';
 
             try {
-                let query = supabaseClient
+                // Read the exact matching row first; retain its original DB date format.
+                let lookup = await supabaseClient
                     .from('data')
-                    .update({
-                        code: newCode,
-                        comment: newComment
-                    });
+                    .select('*')
+                    .eq('userid', elUserId.value);
 
-                // Update by primary key `id` if we fetched it, otherwise filter by `userid` + `date`
-                if (recordId) {
-                    query = query.eq('id', recordId);
-                } else {
-                    query = query
-                        .eq('userid', uid)
-                        .or(`date.eq.${isoDate},date.eq.${formattedDate}`);
+                if (lookup.error) {
+                    // Handles userid columns stored with a different DB type.
+                    lookup = await supabaseClient.from('data').select('*');
+                    if (lookup.error) throw lookup.error;
                 }
 
-                const { data, error } = await query.select();
+                const matchingRows = (lookup.data || []).filter(row =>
+                    normalizeUserId(row.userid) === uid &&
+                    normalizeDbDate(row.date) === isoDate
+                );
 
-                if (error) throw error;
-
-                if (data && data.length > 0) {
-                    showMessage('ບັນທຶກການແກ້ໄຂ (Code ແລະ Comment) ສຳເລັດແລ້ວ!', 'success');
-                    elRecordId.value = data[0].id || recordId;
-                    dataStatusBadge.textContent = '✓ ບັນທຶກສຳເລັດ';
-                    dataStatusBadge.className = 'text-xs px-2.5 py-1 rounded-full font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200/60';
-                    dataStatusBadge.classList.remove('hidden');
-                } else {
-                    showMessage('ບໍ່ພົບແຖວຂໍ້ມູນທີ່ຈະແກ້ໄຂໃນຕາຕະລາງ data (ກວດສອບ User ID ແລະ ວັນທີອີກຄັ້ງ)', 'error');
+                if (matchingRows.length === 0) {
+                    throw new Error('ບໍ່ພົບຂໍ້ມູນໃນຕາຕະລາງ data ສຳລັບ User ID ແລະ ວັນທີນີ້. ກະລຸນາກວດສອບ User ID/ວັນທີ ຫຼື ເພີ່ມລາຍການກ່ອນ.');
                 }
+                if (matchingRows.length > 1) {
+                    throw new Error('ພົບຂໍ້ມູນຊ້ຳຫຼາຍກວ່າ 1 ແຖວ ສຳລັບ User ID ແລະ ວັນທີນີ້. ກະລຸນາກວດສອບຂໍ້ມູນຊ້ຳກ່ອນບັນທຶກ.');
+                }
+
+                const existing = matchingRows[0];
+                let updateQuery = supabaseClient
+                    .from('data')
+                    .update({ code: newCode, comment: newComment });
+
+                // Prefer the primary key if present. Otherwise match the exact
+                // userid + original date value from the row just fetched.
+                if (existing.id !== undefined && existing.id !== null) {
+                    elRecordId.value = String(existing.id);
+                    updateQuery = updateQuery.eq('id', existing.id);
+                } else {
+                    updateQuery = updateQuery
+                        .eq('userid', existing.userid)
+                        .eq('date', existing.date);
+                }
+
+                const { data: updatedRows, error: updateError } = await updateQuery.select('*');
+                if (updateError) throw updateError;
+
+                if (!updatedRows || updatedRows.length !== 1) {
+                    throw new Error('ບັນທຶກບໍ່ສຳເລັດ: ບໍ່ມີແຖວຖືກອັບເດດ. ກະລຸນາກວດສອບ Supabase RLS Policy (UPDATE ແລະ SELECT) ແລະສິດຂອງຕາຕະລາງ data.');
+                }
+
+                if (updatedRows[0].id !== undefined && updatedRows[0].id !== null) {
+                    elRecordId.value = String(updatedRows[0].id);
+                }
+                elCodeInput.value = extractCodeValue(updatedRows[0].code);
+                elCommentInput.value = updatedRows[0].comment ?? '';
+
+                showMessage('ບັນທຶກ Code ແລະ Comment ສຳເລັດແລ້ວ!', 'success');
+                dataStatusBadge.textContent = '✓ ບັນທຶກສຳເລັດ';
+                dataStatusBadge.className = 'text-xs px-2.5 py-1 rounded-full font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200/60';
+                dataStatusBadge.classList.remove('hidden');
+
             } catch (err) {
                 console.error('Save error:', err);
-                showMessage(`ບັນທຶກບໍ່ສຳເລັດ: ${err.message}`, 'error');
+                const detail = err?.message || err?.details || err?.hint || String(err);
+                showMessage(`ບັນທຶກບໍ່ສຳເລັດ: ${detail}`, 'error');
             } finally {
                 btnSave.disabled = false;
                 btnSaveText.textContent = 'ບັນທຶກການແກ້ໄຂ';
@@ -1129,6 +1219,10 @@
         // Sync User ID -> Name & fetch daily data
         elUserId.addEventListener('change', async () => {
             const selectedId = elUserId.value;
+            fetchRequestToken++;
+            elRecordId.value = '';
+            elCodeInput.value = '';
+            elCommentInput.value = '';
             elUserName.value = selectedId;
             hideMessage();
             if (selectedId && elDatePicker.value) {
@@ -1144,6 +1238,10 @@
         // Sync Name -> User ID & fetch daily data
         elUserName.addEventListener('change', async () => {
             const selectedId = elUserName.value;
+            fetchRequestToken++;
+            elRecordId.value = '';
+            elCodeInput.value = '';
+            elCommentInput.value = '';
             elUserId.value = selectedId;
             hideMessage();
             if (selectedId && elDatePicker.value) {
@@ -1160,7 +1258,10 @@
         elDatePicker.addEventListener('change', (e) => {
             const isoVal = e.target.value;
             elDateDisplay.value = formatToDDMMYYYY(isoVal);
-            fetchDataRecord();
+            elRecordId.value = '';
+            elCodeInput.value = '';
+            elCommentInput.value = '';
+            if (elUserId.value && isoVal) fetchDataRecord();
         });
 
         // Quick date buttons & prev/next day navigation
